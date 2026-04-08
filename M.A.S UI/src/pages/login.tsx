@@ -1,9 +1,45 @@
 import { FormEvent, useState } from "react";
 import { useLocation } from "wouter";
-import { AlertCircle, LockKeyhole, Mail } from "lucide-react";
+import {
+  AlertCircle,
+  BriefcaseBusiness,
+  ClipboardCheck,
+  LockKeyhole,
+  Mail,
+  MonitorCog,
+  TrendingUp,
+  Users2,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { signIn } from "@/lib/supabase";
+
+const audienceTiles = [
+  {
+    title: "Founders",
+    description: "Review performance with less noise and more clarity.",
+    icon: TrendingUp,
+    tint: "from-[#1b2431] via-[#121821] to-[#0b0b0c]",
+  },
+  {
+    title: "Lean teams",
+    description: "Keep approvals, planning, and execution aligned.",
+    icon: Users2,
+    tint: "from-[#141414] via-[#171717] to-[#222222]",
+  },
+  {
+    title: "Operators",
+    description: "Monitor the work, route decisions, and stay in control.",
+    icon: MonitorCog,
+    tint: "from-[#101621] via-[#121a24] to-[#0b0b0c]",
+  },
+  {
+    title: "Owners",
+    description: "Reduce marketing chaos without carrying every task yourself.",
+    icon: BriefcaseBusiness,
+    tint: "from-[#191511] via-[#171412] to-[#0b0b0c]",
+  },
+] as const;
 
 export default function Login() {
   const [, setLocation] = useLocation();
@@ -30,58 +66,98 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top,rgba(59,130,246,0.14),transparent_32%),linear-gradient(180deg,hsl(var(--background)),hsl(var(--background)))] px-6 py-10 text-foreground">
-      <div className="mx-auto flex min-h-[calc(100vh-5rem)] max-w-5xl items-center justify-center">
-        <div className="grid w-full max-w-4xl overflow-hidden rounded-3xl border border-border bg-card shadow-[0_24px_80px_rgba(15,23,42,0.08)] lg:grid-cols-[1.1fr_0.9fr]">
-          <div className="hidden border-r border-border bg-sidebar px-10 py-12 text-sidebar-foreground lg:flex lg:flex-col lg:justify-between">
+    <div className="min-h-screen bg-[radial-gradient(circle_at_top,rgba(116,152,214,0.15),transparent_30%),linear-gradient(180deg,#f6f4ef_0%,#f4f2ec_100%)] px-5 py-8 text-foreground sm:px-6 lg:px-8 lg:py-10">
+      <div className="mx-auto flex min-h-[calc(100vh-4rem)] max-w-6xl items-center justify-center">
+        <div className="grid w-full max-w-5xl overflow-hidden rounded-[2rem] border border-black/10 bg-white shadow-[0_26px_90px_rgba(15,23,42,0.1)] lg:grid-cols-[1.08fr_0.92fr]">
+          <div className="hidden bg-[#0b0b0c] px-8 py-8 text-white lg:flex lg:flex-col lg:justify-between xl:px-10 xl:py-10">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-sidebar-foreground/50">TSH</p>
-              <h1 className="mt-4 text-4xl font-semibold tracking-tight">Marketing OS</h1>
-              <p className="mt-4 max-w-sm text-sm leading-6 text-sidebar-foreground/70">
-                Sign in to access inbox approvals, content planning, academic calendar triggers, and pipeline monitoring.
+              <p className="text-[11px] font-semibold lowercase tracking-[0.24em] text-white/55">samm</p>
+              <h1 className="mt-4 max-w-md text-4xl font-semibold tracking-tight text-[#f5f3ef] xl:text-[2.7rem]">
+                less marketing chaos
+              </h1>
+              <p className="mt-4 max-w-md text-sm leading-6 text-white/68 xl:text-[15px]">
+                Coordinate campaigns, approvals, and execution from one calm control layer built for founders,
+                operators, and lean teams.
               </p>
             </div>
-            <div className="rounded-2xl border border-sidebar-border bg-sidebar-accent/60 p-5">
-              <p className="text-xs uppercase tracking-[0.2em] text-sidebar-foreground/40">Operator access</p>
-              <p className="mt-3 text-sm leading-6 text-sidebar-foreground/75">
-                Your Supabase session carries the organization claim that unlocks dashboard data through RLS.
-              </p>
+
+            <div className="mt-8 grid grid-cols-2 gap-3">
+              {audienceTiles.map((tile) => {
+                const Icon = tile.icon;
+
+                return (
+                  <div
+                    key={tile.title}
+                    className={`group relative min-h-44 overflow-hidden rounded-[1.4rem] border border-white/8 bg-gradient-to-br ${tile.tint} p-4`}
+                  >
+                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.12),transparent_35%)] opacity-80" />
+                    <div className="absolute inset-0 bg-[linear-gradient(180deg,transparent_0%,rgba(0,0,0,0.3)_100%)]" />
+                    <div className="relative flex h-full flex-col justify-between">
+                      <div className="flex items-center justify-between">
+                        <span className="rounded-full border border-white/12 bg-white/6 px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.18em] text-white/72">
+                          image slot
+                        </span>
+                        <Icon className="h-4 w-4 text-white/78" />
+                      </div>
+
+                      <div>
+                        <p className="text-sm font-semibold text-[#f5f3ef]">{tile.title}</p>
+                        <p className="mt-2 max-w-[15rem] text-[12px] leading-5 text-white/72">{tile.description}</p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="mt-8 rounded-[1.4rem] border border-white/10 bg-white/[0.04] p-5">
+              <div className="flex items-start gap-3">
+                <div className="rounded-full border border-white/12 bg-white/8 p-2">
+                  <ClipboardCheck className="h-4 w-4 text-white/78" />
+                </div>
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-white/45">operator relief</p>
+                  <p className="mt-2 text-sm leading-6 text-white/74">
+                    Keep the work moving without carrying every approval, follow-up, and campaign handoff on your own.
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
 
-          <div className="flex items-center justify-center px-6 py-10 sm:px-10">
+          <div className="flex items-center justify-center bg-[#fcfbf8] px-6 py-10 sm:px-10 lg:px-12">
             <div className="w-full max-w-sm">
               <div className="text-center lg:text-left">
-                <p className="text-sm font-semibold uppercase tracking-[0.22em] text-primary">TSH</p>
-                <h2 className="mt-3 text-3xl font-semibold tracking-tight">Marketing OS</h2>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  Sign in with your operator account to load the dashboard.
+                <p className="text-[11px] font-semibold lowercase tracking-[0.24em] text-foreground/72">samm</p>
+                <h2 className="mt-4 text-[2.15rem] font-semibold tracking-tight text-[#0b0b0c]">orchestrate the work</h2>
+                <p className="mt-3 text-sm leading-6 text-muted-foreground">
+                  Sign in to review approvals, coordinate execution, and keep your marketing flow aligned.
                 </p>
               </div>
 
               <form className="mt-8 space-y-4" onSubmit={handleSubmit}>
                 <label className="block space-y-2">
-                  <span className="text-sm font-medium">Email</span>
+                  <span className="text-sm font-medium text-foreground">Email</span>
                   <div className="relative">
                     <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                     <Input
-                      className="h-11 pl-10"
+                      className="h-11 rounded-xl border-black/10 bg-white pl-10"
                       type="email"
                       autoComplete="email"
                       value={email}
                       onChange={(event) => setEmail(event.target.value)}
-                      placeholder="ops@tsh.com"
+                      placeholder="ops@company.com"
                       required
                     />
                   </div>
                 </label>
 
                 <label className="block space-y-2">
-                  <span className="text-sm font-medium">Password</span>
+                  <span className="text-sm font-medium text-foreground">Password</span>
                   <div className="relative">
                     <LockKeyhole className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                     <Input
-                      className="h-11 pl-10"
+                      className="h-11 rounded-xl border-black/10 bg-white pl-10"
                       type="password"
                       autoComplete="current-password"
                       value={password}
@@ -93,13 +169,13 @@ export default function Login() {
                 </label>
 
                 {error ? (
-                  <div className="flex items-start gap-3 rounded-xl border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+                  <div className="flex items-start gap-3 rounded-2xl border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive">
                     <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
                     <span>{error}</span>
                   </div>
                 ) : null}
 
-                <Button className="h-11 w-full" type="submit" disabled={isSubmitting}>
+                <Button className="h-11 w-full rounded-xl bg-[#0b0b0c] text-white hover:bg-[#171717]" type="submit" disabled={isSubmitting}>
                   {isSubmitting ? "Signing in..." : "Sign in"}
                 </Button>
               </form>
