@@ -10,6 +10,10 @@ import {
   TrendingUp,
   Users2,
 } from "lucide-react";
+import founderReviewImage from "@/assets/login/founder-review.jpg";
+import leanTeamImage from "@/assets/login/lean-team.jpg";
+import operatorMonitorImage from "@/assets/login/operator-monitor.jpg";
+import ownerWorkflowImage from "@/assets/login/owner-workflow.jpg";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { signIn } from "@/lib/supabase";
@@ -19,25 +23,25 @@ const audienceTiles = [
     title: "Founders",
     description: "Review performance with less noise and more clarity.",
     icon: TrendingUp,
-    tint: "from-[#1b2431] via-[#121821] to-[#0b0b0c]",
+    image: founderReviewImage,
   },
   {
     title: "Lean teams",
     description: "Keep approvals, planning, and execution aligned.",
     icon: Users2,
-    tint: "from-[#141414] via-[#171717] to-[#222222]",
+    image: leanTeamImage,
   },
   {
     title: "Operators",
     description: "Monitor the work, route decisions, and stay in control.",
     icon: MonitorCog,
-    tint: "from-[#101621] via-[#121a24] to-[#0b0b0c]",
+    image: operatorMonitorImage,
   },
   {
     title: "Owners",
     description: "Reduce marketing chaos without carrying every task yourself.",
     icon: BriefcaseBusiness,
-    tint: "from-[#191511] via-[#171412] to-[#0b0b0c]",
+    image: ownerWorkflowImage,
   },
 ] as const;
 
@@ -88,21 +92,26 @@ export default function Login() {
                 return (
                   <div
                     key={tile.title}
-                    className={`group relative min-h-44 overflow-hidden rounded-[1.4rem] border border-white/8 bg-gradient-to-br ${tile.tint} p-4`}
+                    className="group relative min-h-44 overflow-hidden rounded-[1.4rem] border border-white/8 bg-[#101113]"
                   >
-                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.12),transparent_35%)] opacity-80" />
-                    <div className="absolute inset-0 bg-[linear-gradient(180deg,transparent_0%,rgba(0,0,0,0.3)_100%)]" />
-                    <div className="relative flex h-full flex-col justify-between">
+                    <img
+                      src={tile.image}
+                      alt={tile.title}
+                      className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
+                    />
+                    <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(7,7,8,0.18)_0%,rgba(7,7,8,0.72)_100%)]" />
+                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.12),transparent_35%)] opacity-70" />
+                    <div className="relative flex h-full flex-col justify-between p-4">
                       <div className="flex items-center justify-between">
-                        <span className="rounded-full border border-white/12 bg-white/6 px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.18em] text-white/72">
-                          image slot
+                        <span className="rounded-full border border-white/14 bg-black/20 px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.18em] text-white/78">
+                          {tile.title}
                         </span>
-                        <Icon className="h-4 w-4 text-white/78" />
+                        <Icon className="h-4 w-4 text-white/80" />
                       </div>
 
                       <div>
                         <p className="text-sm font-semibold text-[#f5f3ef]">{tile.title}</p>
-                        <p className="mt-2 max-w-[15rem] text-[12px] leading-5 text-white/72">{tile.description}</p>
+                        <p className="mt-2 max-w-[15rem] text-[12px] leading-5 text-white/76">{tile.description}</p>
                       </div>
                     </div>
                   </div>
