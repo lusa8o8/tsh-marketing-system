@@ -60,15 +60,13 @@ function PlatformDisplay({ platform, platforms }: { platform: string; platforms?
             return (
               <Icon
                 key={p}
-                className={cn("w-3.5 h-3.5", PLATFORM_COLORS[p])}
+                className={cn("h-3.5 w-3.5", PLATFORM_COLORS[p])}
                 title={PLATFORM_LABELS[p] || p}
               />
             );
           })}
         </div>
-        <span className="text-sm font-medium text-muted-foreground">
-          Cross-platform
-        </span>
+        <span className="text-sm font-medium text-muted-foreground">Cross-platform</span>
       </div>
     );
   }
@@ -76,10 +74,8 @@ function PlatformDisplay({ platform, platforms }: { platform: string; platforms?
   const Icon = PLATFORM_ICONS[platform] || Clock;
   return (
     <div className="flex items-center gap-2">
-      <Icon className={cn("w-4 h-4", PLATFORM_COLORS[platform])} />
-      <span className="text-sm font-medium capitalize">
-        {PLATFORM_LABELS[platform] || platform}
-      </span>
+      <Icon className={cn("h-4 w-4", PLATFORM_COLORS[platform])} />
+      <span className="text-sm font-medium capitalize">{PLATFORM_LABELS[platform] || platform}</span>
     </div>
   );
 }
@@ -138,37 +134,31 @@ function ContentCard({
   return (
     <div
       className={cn(
-        "border rounded-lg bg-card transition-all duration-200",
+        "rounded-xl border bg-card transition-all duration-200",
         isFailed ? "border-red-200" : isDraft ? "border-blue-200/60" : "border-border",
-        isExpanded ? "col-span-full shadow-sm" : "hover:border-foreground/20 hover:shadow-sm cursor-pointer"
+        isExpanded ? "col-span-full shadow-sm" : "cursor-pointer hover:border-foreground/20 hover:shadow-sm"
       )}
       onClick={!isExpanded ? onToggle : undefined}
     >
-      {/* Card header */}
-      <div
-        className={cn("flex items-start justify-between gap-4 p-5", isExpanded && "cursor-pointer")}
-        onClick={isExpanded ? onToggle : undefined}
-      >
-        <div className="flex items-center gap-3 min-w-0">
+      <div className={cn("flex items-start justify-between gap-4 p-5", isExpanded && "cursor-pointer")} onClick={isExpanded ? onToggle : undefined}>
+        <div className="min-w-0 flex items-center gap-3">
           <div className="min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex flex-wrap items-center gap-2">
               <PlatformDisplay platform={item.platform} platforms={item.platforms} />
-              <span className="flex items-center gap-1 text-[11px] text-muted-foreground border rounded-full px-2 py-0.5">
-                <TypeIcon className="w-3 h-3" />
+              <span className="flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] text-muted-foreground">
+                <TypeIcon className="h-3 w-3" />
                 {contentType.label}
               </span>
             </div>
-            {item.subject_line && (
-              <p className="text-sm font-medium mt-0.5 truncate">{item.subject_line}</p>
-            )}
+            {item.subject_line && <p className="mt-0.5 truncate text-sm font-medium">{item.subject_line}</p>}
           </div>
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex shrink-0 items-center gap-2">
           <Badge
             variant="secondary"
             className={cn(
-              "capitalize font-medium text-[10px] border-0",
+              "border-0 text-[10px] font-medium capitalize",
               item.status === "published" && "bg-green-100 text-green-800",
               item.status === "scheduled" && "bg-blue-50 text-blue-700",
               item.status === "failed" && "bg-red-100 text-red-700",
@@ -177,58 +167,48 @@ function ContentCard({
           >
             {item.status}
           </Badge>
-          <button
-            className="text-muted-foreground hover:text-foreground transition-colors p-0.5"
-            aria-label={isExpanded ? "Collapse" : "Expand"}
-            onClick={(e) => { e.stopPropagation(); onToggle(); }}
-          >
-            {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+          <button className="p-0.5 text-muted-foreground transition-colors hover:text-foreground" aria-label={isExpanded ? "Collapse" : "Expand"} onClick={(e) => { e.stopPropagation(); onToggle(); }}>
+            {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
           </button>
         </div>
       </div>
 
-      {/* Body preview — collapsed */}
       {!isExpanded && (
-        <div className="px-5 pb-4 -mt-2">
-          <p className="text-[13px] text-muted-foreground line-clamp-2 leading-relaxed">
-            {stripMarkdownToPreviewText(item.body)}
-          </p>
+        <div className="-mt-2 px-5 pb-4">
+          <p className="line-clamp-2 text-[13px] leading-relaxed text-muted-foreground">{stripMarkdownToPreviewText(item.body)}</p>
         </div>
       )}
 
-      {/* Expanded content */}
       {isExpanded && (
-        <div className="px-5 pb-5 border-t border-dashed pt-4 space-y-4">
-          <div className="bg-muted/40 rounded-lg p-4 border">
-            <MarkdownBody content={stripMarkdownToPreviewText(item.body)} />
+        <div className="space-y-4 border-t border-dashed px-5 pb-5 pt-4">
+          <div className="rounded-lg border bg-muted/40 p-4">
+            <MarkdownBody content={item.body} />
           </div>
 
-          {/* Cross-platform note */}
           {item.platforms && item.platforms.length > 1 && (
             <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
               <div className="flex items-center gap-1">
                 {item.platforms.map((p) => {
                   const Icon = PLATFORM_ICONS[p] || Clock;
-                  return <Icon key={p} className={cn("w-3 h-3", PLATFORM_COLORS[p])} />;
+                  return <Icon key={p} className={cn("h-3 w-3", PLATFORM_COLORS[p])} />;
                 })}
               </div>
               <span>
-                This post will be published identically to: {item.platforms.map(p => PLATFORM_LABELS[p] || p).join(" & ")}
+                This post will be published identically to: {item.platforms.map((p) => PLATFORM_LABELS[p] || p).join(" & ")}
               </span>
             </div>
           )}
 
           <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
-            <Images className="w-3.5 h-3.5" />
-            <span>No attachments — graphics &amp; carousels will appear here</span>
+            <Images className="h-3.5 w-3.5" />
+            <span>No attachments � graphics and carousels will appear here</span>
           </div>
         </div>
       )}
 
-      {/* Footer */}
-      <div className={cn("px-5 pb-4 flex items-center justify-between", isExpanded && "border-t pt-3")}>
-        <div className="text-xs text-muted-foreground flex items-center gap-1.5">
-          <Clock className="w-3.5 h-3.5" />
+      <div className={cn("flex items-center justify-between px-5 pb-4", isExpanded && "border-t pt-3")}>
+        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <Clock className="h-3.5 w-3.5" />
           {item.status === "scheduled" && item.scheduled_at ? (
             <span>Scheduled: {new Date(item.scheduled_at).toLocaleDateString()}</span>
           ) : item.status === "published" && item.published_at ? (
@@ -243,37 +223,20 @@ function ContentCard({
         <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
           {isDraft && (
             <>
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-7 text-xs"
-                onClick={() => onReject(item.id)}
-                disabled={actionPending}
-              >
-                <X className="w-3.5 h-3.5 mr-1" />
+              <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => onReject(item.id)} disabled={actionPending}>
+                <X className="mr-1 h-3.5 w-3.5" />
                 Reject
               </Button>
-              <Button
-                size="sm"
-                className="h-7 text-xs bg-green-600 hover:bg-green-700 text-white"
-                onClick={() => onApprove(item.id)}
-                disabled={actionPending}
-              >
-                <Check className="w-3.5 h-3.5 mr-1" />
+              <Button size="sm" className="h-7 bg-green-600 text-xs text-white hover:bg-green-700" onClick={() => onApprove(item.id)} disabled={actionPending}>
+                <Check className="mr-1 h-3.5 w-3.5" />
                 Approve
               </Button>
             </>
           )}
 
           {isFailed && (
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-7 text-xs border-red-200 text-red-700 hover:bg-red-50"
-              onClick={() => onRetry(item.id)}
-              disabled={retryPending}
-            >
-              <RefreshCw className={cn("w-3.5 h-3.5 mr-1", retryPending && "animate-spin")} />
+            <Button size="sm" variant="outline" className="h-7 border-red-200 text-xs text-red-700 hover:bg-red-50" onClick={() => onRetry(item.id)} disabled={retryPending}>
+              <RefreshCw className={cn("mr-1 h-3.5 w-3.5", retryPending && "animate-spin")} />
               Retry
             </Button>
           )}
@@ -281,8 +244,8 @@ function ContentCard({
       </div>
 
       {isFailed && item.error_message && (
-        <div className="mx-5 mb-4 text-[11px] text-red-600 bg-red-50 p-2 rounded-md flex items-start gap-1.5">
-          <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+        <div className="mx-5 mb-4 flex items-start gap-1.5 rounded-md bg-red-50 p-2 text-[11px] text-red-600">
+          <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
           <span>{item.error_message}</span>
         </div>
       )}
@@ -324,7 +287,7 @@ export default function Content() {
   });
 
   const handleToggle = (id: string) => {
-    setExpandedId(prev => (prev === id ? null : id));
+    setExpandedId((prev) => (prev === id ? null : id));
   };
 
   const handleApprove = (id: string) => {
@@ -336,34 +299,41 @@ export default function Content() {
   };
 
   return (
-    <div className="flex flex-col h-full">
-      <header className="h-14 border-b px-6 flex items-center justify-between shrink-0 bg-background">
-        <h1 className="font-semibold text-lg">Content Registry</h1>
-        <Button size="sm">New Post</Button>
+    <div className="flex h-full flex-col bg-[linear-gradient(180deg,rgba(244,241,235,0.45)_0%,rgba(244,241,235,0)_30%)]">
+      <header className="shrink-0 border-b border-border/80 bg-background/95 px-4 py-4 backdrop-blur md:px-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h1 className="text-xl font-semibold tracking-tight text-foreground">Content Registry</h1>
+            <p className="mt-1 text-sm text-muted-foreground">Drafts, scheduled posts, and published assets flowing through the workspace.</p>
+          </div>
+          <Button size="sm">New Post</Button>
+        </div>
       </header>
 
-      <div className="border-b px-6 flex gap-6 text-sm font-medium shrink-0">
-        {TABS.map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => { setStatus(tab.id); setExpandedId(null); }}
-            className={cn(
-              "py-3 border-b-2 transition-colors",
-              status === tab.id
-                ? "border-primary text-foreground"
-                : "border-transparent text-muted-foreground hover:text-foreground"
-            )}
-          >
-            {tab.label}
-          </button>
-        ))}
+      <div className="shrink-0 border-b border-border/80 bg-background/70 px-4 md:px-6">
+        <div className="flex gap-6 overflow-x-auto text-sm font-medium">
+          {TABS.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => { setStatus(tab.id); setExpandedId(null); }}
+              className={cn(
+                "border-b-2 py-3 transition-colors",
+                status === tab.id
+                  ? "border-primary text-foreground"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
+              )}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-6">
-        <div className="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="flex-1 overflow-y-auto px-4 py-5 md:px-6 md:py-6">
+        <div className="mx-auto grid max-w-4xl grid-cols-1 gap-4 md:grid-cols-2">
           {isLoading ? (
             Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="border rounded-lg p-5 bg-card space-y-4">
+              <div key={i} className="space-y-4 rounded-xl border border-border bg-card p-5">
                 <div className="flex justify-between">
                   <Skeleton className="h-5 w-24" />
                   <Skeleton className="h-5 w-16 rounded-full" />
@@ -373,8 +343,8 @@ export default function Content() {
               </div>
             ))
           ) : items?.length === 0 ? (
-            <div className="col-span-full text-center py-20 text-muted-foreground">
-              <LayoutList className="w-12 h-12 mx-auto mb-4 opacity-20" />
+            <div className="col-span-full py-20 text-center text-muted-foreground">
+              <LayoutList className="mx-auto mb-4 h-12 w-12 opacity-20" />
               <p>No {status} content found.</p>
             </div>
           ) : (
@@ -397,9 +367,3 @@ export default function Content() {
     </div>
   );
 }
-
-
-
-
-
-

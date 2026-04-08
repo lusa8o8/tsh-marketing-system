@@ -36,7 +36,7 @@ export default function Calendar() {
   const [createOpen, setCreateOpen] = useState(false);
   const [formData, setFormData] = useState({
     event_type: "exam" as any,
-    event_date: new Date().toISOString().split('T')[0],
+    event_date: new Date().toISOString().split("T")[0],
     label: "",
     universities: [] as string[]
   });
@@ -47,87 +47,92 @@ export default function Calendar() {
   };
 
   const toggleUni = (uni: string) => {
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
       universities: prev.universities.includes(uni)
-        ? prev.universities.filter(u => u !== uni)
+        ? prev.universities.filter((u) => u !== uni)
         : [...prev.universities, uni]
     }));
   };
 
   return (
-    <div className="flex flex-col h-full">
-      <header className="h-14 border-b px-6 flex items-center justify-between shrink-0 bg-background">
-        <h1 className="font-semibold text-lg">Academic Calendar</h1>
-        
-        <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-          <DialogTrigger asChild>
-            <Button size="sm">
-              <Plus className="w-4 h-4 mr-2" />
-              Add Event
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Add Calendar Event</DialogTitle>
-            </DialogHeader>
-            <form onSubmit={handleCreate} className="space-y-4 pt-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Event Type</Label>
-                  <Select value={formData.event_type} onValueChange={v => setFormData({...formData, event_type: v})}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="exam">Exam</SelectItem>
-                      <SelectItem value="registration">Registration</SelectItem>
-                      <SelectItem value="holiday">Holiday</SelectItem>
-                      <SelectItem value="orientation">Orientation</SelectItem>
-                      <SelectItem value="graduation">Graduation</SelectItem>
-                      <SelectItem value="other">Other</SelectItem>
-                    </SelectContent>
-                  </Select>
+    <div className="flex h-full flex-col bg-[linear-gradient(180deg,rgba(244,241,235,0.45)_0%,rgba(244,241,235,0)_30%)]">
+      <header className="shrink-0 border-b border-border/80 bg-background/95 px-4 py-4 backdrop-blur md:px-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h1 className="text-xl font-semibold tracking-tight text-foreground">Academic Calendar</h1>
+            <p className="mt-1 text-sm text-muted-foreground">Upcoming dates, trigger windows, and university timelines feeding coordinated work.</p>
+          </div>
+
+          <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+            <DialogTrigger asChild>
+              <Button size="sm">
+                <Plus className="mr-2 h-4 w-4" />
+                Add Event
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Add Calendar Event</DialogTitle>
+              </DialogHeader>
+              <form onSubmit={handleCreate} className="space-y-4 pt-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Event Type</Label>
+                    <Select value={formData.event_type} onValueChange={(v) => setFormData({ ...formData, event_type: v })}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="exam">Exam</SelectItem>
+                        <SelectItem value="registration">Registration</SelectItem>
+                        <SelectItem value="holiday">Holiday</SelectItem>
+                        <SelectItem value="orientation">Orientation</SelectItem>
+                        <SelectItem value="graduation">Graduation</SelectItem>
+                        <SelectItem value="other">Other</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Date</Label>
+                    <Input type="date" value={formData.event_date} onChange={(e) => setFormData({ ...formData, event_date: e.target.value })} required />
+                  </div>
                 </div>
                 <div className="space-y-2">
-                  <Label>Date</Label>
-                  <Input type="date" value={formData.event_date} onChange={e => setFormData({...formData, event_date: e.target.value})} required />
+                  <Label>Label / Description</Label>
+                  <Input value={formData.label} onChange={(e) => setFormData({ ...formData, label: e.target.value })} placeholder="e.g. End of Semester Exams" required />
                 </div>
-              </div>
-              <div className="space-y-2">
-                <Label>Label / Description</Label>
-                <Input value={formData.label} onChange={e => setFormData({...formData, label: e.target.value})} placeholder="e.g. End of Semester Exams" required />
-              </div>
-              <div className="space-y-2">
-                <Label>Universities</Label>
-                <div className="flex flex-wrap gap-2">
-                  {UNI_OPTIONS.map(uni => (
-                    <Badge 
-                      key={uni}
-                      variant={formData.universities.includes(uni) ? "default" : "outline"}
-                      className="cursor-pointer"
-                      onClick={() => toggleUni(uni)}
-                    >
-                      {uni}
-                    </Badge>
-                  ))}
+                <div className="space-y-2">
+                  <Label>Universities</Label>
+                  <div className="flex flex-wrap gap-2">
+                    {UNI_OPTIONS.map((uni) => (
+                      <Badge
+                        key={uni}
+                        variant={formData.universities.includes(uni) ? "default" : "outline"}
+                        className="cursor-pointer"
+                        onClick={() => toggleUni(uni)}
+                      >
+                        {uni}
+                      </Badge>
+                    ))}
+                  </div>
                 </div>
-              </div>
-              <DialogFooter>
-                <Button type="submit" disabled={createMutation.isPending || formData.universities.length === 0}>
-                  Save Event
-                </Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
+                <DialogFooter>
+                  <Button type="submit" disabled={createMutation.isPending || formData.universities.length === 0}>
+                    Save Event
+                  </Button>
+                </DialogFooter>
+              </form>
+            </DialogContent>
+          </Dialog>
+        </div>
       </header>
 
-      <div className="flex-1 overflow-y-auto p-6">
-        <div className="max-w-4xl mx-auto space-y-3">
+      <div className="flex-1 overflow-y-auto px-4 py-5 md:px-6 md:py-6">
+        <div className="mx-auto max-w-4xl space-y-3">
           {isLoading ? (
             Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="border rounded-lg p-4 bg-card flex items-center gap-4">
+              <div key={i} className="flex items-center gap-4 rounded-xl border border-border bg-card p-4 shadow-sm">
                 <Skeleton className="h-14 w-14 rounded-md" />
                 <div className="flex-1 space-y-2">
                   <Skeleton className="h-5 w-1/3" />
@@ -136,62 +141,60 @@ export default function Calendar() {
               </div>
             ))
           ) : events?.length === 0 ? (
-            <div className="text-center py-20 text-muted-foreground">
-              <CalendarDays className="w-12 h-12 mx-auto mb-4 opacity-20" />
+            <div className="py-20 text-center text-muted-foreground">
+              <CalendarDays className="mx-auto mb-4 h-12 w-12 opacity-20" />
               <p>No upcoming academic events.</p>
             </div>
           ) : (
-            events?.map(event => {
+            events?.map((event) => {
               const date = new Date(event.event_date);
               const isToday = new Date().toDateString() === date.toDateString();
               const isPast = date < new Date() && !isToday;
-              
+
               return (
                 <div key={event.id} className={cn(
-                  "border rounded-lg p-4 bg-card shadow-sm flex items-center gap-5 transition-opacity",
-                  isPast && "opacity-60 bg-muted/30"
+                  "flex items-center gap-5 rounded-xl border border-border bg-card p-4 shadow-sm transition-opacity",
+                  isPast && "bg-muted/30 opacity-60"
                 )}>
                   <div className={cn(
-                    "flex flex-col items-center justify-center w-16 h-16 rounded-md shrink-0 border",
-                    isToday ? "bg-primary/10 border-primary/20 text-primary" : 
-                    isPast ? "bg-muted border-muted-foreground/20 text-muted-foreground" : 
-                    "bg-blue-50 border-blue-100 text-blue-700"
+                    "flex h-16 w-16 shrink-0 flex-col items-center justify-center rounded-md border",
+                    isToday ? "border-primary/20 bg-primary/10 text-primary" :
+                    isPast ? "border-muted-foreground/20 bg-muted text-muted-foreground" :
+                    "border-blue-100 bg-blue-50 text-blue-700"
                   )}>
                     <span className="text-[10px] font-bold uppercase tracking-wider">
-                      {date.toLocaleString('default', { month: 'short' })}
+                      {date.toLocaleString("default", { month: "short" })}
                     </span>
-                    <span className="text-xl font-bold leading-none mt-1">
-                      {date.getDate()}
-                    </span>
+                    <span className="mt-1 text-xl font-bold leading-none">{date.getDate()}</span>
                   </div>
-                  
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1.5">
-                      <h3 className={cn("font-semibold text-[15px] truncate", isPast && "text-muted-foreground")}>
+
+                  <div className="min-w-0 flex-1">
+                    <div className="mb-1.5 flex items-center gap-2">
+                      <h3 className={cn("truncate text-[15px] font-semibold", isPast && "text-muted-foreground")}>
                         {event.label}
                       </h3>
-                      <Badge variant="outline" className="text-[10px] capitalize h-5 font-medium">
+                      <Badge variant="outline" className="h-5 text-[10px] font-medium capitalize">
                         {event.event_type}
                       </Badge>
                     </div>
                     <div className="flex flex-wrap gap-1.5">
-                      {event.universities.map(uni => (
-                        <Badge key={uni} variant="secondary" className="text-[10px] bg-muted hover:bg-muted font-medium text-muted-foreground">
+                      {event.universities.map((uni) => (
+                        <Badge key={uni} variant="secondary" className="bg-muted text-[10px] font-medium text-muted-foreground hover:bg-muted">
                           {uni}
                         </Badge>
                       ))}
                     </div>
                   </div>
-                  
-                  <div className="shrink-0 flex flex-col items-center justify-center gap-1 w-20 text-center">
+
+                  <div className="flex w-20 shrink-0 flex-col items-center justify-center gap-1 text-center">
                     {event.triggered ? (
                       <>
-                        <CheckCircle2 className="w-5 h-5 text-green-600" />
+                        <CheckCircle2 className="h-5 w-5 text-green-600" />
                         <span className="text-[10px] font-medium text-green-600">Triggered</span>
                       </>
                     ) : (
                       <>
-                        <Clock className="w-5 h-5 text-muted-foreground/50" />
+                        <Clock className="h-5 w-5 text-muted-foreground/50" />
                         <span className="text-[10px] font-medium text-muted-foreground">Pending</span>
                       </>
                     )}

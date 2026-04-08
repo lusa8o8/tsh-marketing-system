@@ -3,7 +3,7 @@ import ReactMarkdown from "react-markdown";
 import { useListInboxItems, useActionInboxItem, getGetInboxSummaryQueryKey, getListInboxItemsQueryKey } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
 import { formatDistanceToNow } from "date-fns";
-import { Check, X, AlertCircle, ChevronDown, ChevronUp } from "lucide-react";
+import { Check, X, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -53,38 +53,41 @@ export default function Inbox() {
   });
 
   return (
-    <div className="flex flex-col h-full">
-      <header className="h-14 border-b px-4 md:px-6 flex items-center shrink-0 bg-background">
-        <h1 className="font-semibold text-lg">Inbox</h1>
+    <div className="flex h-full flex-col bg-[linear-gradient(180deg,rgba(244,241,235,0.45)_0%,rgba(244,241,235,0)_30%)]">
+      <header className="shrink-0 border-b border-border/80 bg-background/95 px-4 py-4 backdrop-blur md:px-6">
+        <h1 className="text-xl font-semibold tracking-tight text-foreground">Inbox</h1>
+        <p className="mt-1 text-sm text-muted-foreground">Approvals, escalations, and reports routed through your workspace.</p>
       </header>
 
-      <div className="border-b px-4 md:px-6 flex gap-5 text-sm font-medium shrink-0 overflow-x-auto">
-        {[
-          { id: "all", label: "All" },
-          { id: "urgent", label: "Urgent" },
-          { id: "pending", label: "Pending" },
-          { id: "fyi", label: "FYI" },
-        ].map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setFilter(tab.id as any)}
-            className={cn(
-              "py-3 border-b-2 transition-colors whitespace-nowrap",
-              filter === tab.id
-                ? "border-primary text-foreground"
-                : "border-transparent text-muted-foreground hover:text-foreground"
-            )}
-          >
-            {tab.label}
-          </button>
-        ))}
+      <div className="shrink-0 border-b border-border/80 bg-background/70 px-4 md:px-6">
+        <div className="flex gap-5 overflow-x-auto text-sm font-medium">
+          {[
+            { id: "all", label: "All" },
+            { id: "urgent", label: "Urgent" },
+            { id: "pending", label: "Pending" },
+            { id: "fyi", label: "FYI" },
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setFilter(tab.id as any)}
+              className={cn(
+                "whitespace-nowrap border-b-2 py-3 transition-colors",
+                filter === tab.id
+                  ? "border-primary text-foreground"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
+              )}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4 md:p-6">
-        <div className="max-w-3xl mx-auto space-y-3">
+      <div className="flex-1 overflow-y-auto px-4 py-5 md:px-6 md:py-6">
+        <div className="mx-auto max-w-3xl space-y-3">
           {isLoading ? (
             Array.from({ length: 5 }).map((_, i) => (
-              <div key={i} className="border rounded-lg p-4 bg-card shadow-sm space-y-3">
+              <div key={i} className="space-y-3 rounded-xl border border-border bg-card p-4 shadow-sm">
                 <div className="flex items-center gap-3">
                   <Skeleton className="h-5 w-28 rounded-full" />
                   <Skeleton className="h-4 flex-1" />
@@ -94,9 +97,9 @@ export default function Inbox() {
               </div>
             ))
           ) : items?.length === 0 ? (
-            <div className="text-center py-20 text-muted-foreground">
-              <Check className="w-12 h-12 mx-auto mb-4 opacity-20" />
-              <p>You're all caught up!</p>
+            <div className="py-20 text-center text-muted-foreground">
+              <Check className="mx-auto mb-4 h-12 w-12 opacity-20" />
+              <p>You&apos;re all caught up.</p>
             </div>
           ) : (
             items
@@ -137,112 +140,81 @@ function InboxItemCard({ item }: { item: any }) {
   return (
     <div
       className={cn(
-        "border rounded-lg bg-card overflow-hidden transition-all duration-200 shadow-sm",
+        "overflow-hidden rounded-xl border bg-card shadow-sm transition-all duration-200",
         isUrgent ? "border-red-200" : "border-border",
         !isPending && "opacity-60"
       )}
     >
-      {/* ── Clickable header ── */}
       <div
         className={cn(
-          "p-4 cursor-pointer hover:bg-muted/50 transition-colors select-none",
-          expanded && "bg-muted/30"
+          "cursor-pointer select-none p-4 transition-colors hover:bg-muted/40",
+          expanded && "bg-muted/25"
         )}
         onClick={() => setExpanded(!expanded)}
       >
-        {/* Row 1: badge + status + chevron */}
-        <div className="flex items-center gap-2 mb-2">
-          {/* Urgency dot */}
+        <div className="mb-2 flex items-center gap-2">
           {isPending && (
             <span
               className={cn(
-                "w-2 h-2 rounded-full shrink-0",
+                "h-2 w-2 shrink-0 rounded-full",
                 isUrgent ? "bg-red-500 animate-pulse" : "bg-blue-500"
               )}
             />
           )}
 
-          <Badge
-            variant="outline"
-            className={cn(
-              "text-[11px] font-medium shrink-0",
-              BADGE_COLORS[item.item_type]
-            )}
-          >
+          <Badge variant="outline" className={cn("shrink-0 text-[11px] font-medium", BADGE_COLORS[item.item_type])}>
             {BADGE_LABELS[item.item_type] || item.item_type.replace(/_/g, " ")}
           </Badge>
 
           {!isPending && (
-            <Badge
-              variant="secondary"
-              className="text-[10px] uppercase h-5 px-1.5 bg-green-100 text-green-800 border-green-200"
-            >
+            <Badge variant="secondary" className="h-5 border-green-200 bg-green-100 px-1.5 text-[10px] uppercase text-green-800">
               {item.status}
             </Badge>
           )}
 
           <ChevronDown
             className={cn(
-              "w-4 h-4 text-muted-foreground/50 ml-auto shrink-0 transition-transform duration-200",
+              "ml-auto h-4 w-4 shrink-0 text-muted-foreground/50 transition-transform duration-200",
               expanded && "rotate-180"
             )}
           />
         </div>
 
-        {/* Row 2: title */}
-        <h3 className="font-semibold text-[14px] leading-snug mb-1 pr-2">
-          {item.payload.title || item.item_type}
-        </h3>
+        <h3 className="mb-1 pr-2 text-[14px] font-semibold leading-snug">{item.payload.title || item.item_type}</h3>
 
-        {/* Row 3: preview */}
-        <p className="text-[13px] text-muted-foreground line-clamp-2 leading-relaxed">
+        <p className="line-clamp-2 text-[13px] leading-relaxed text-muted-foreground">
           {stripMarkdownToPreviewText(item.payload.preview || item.payload.post_copy) || "No preview available"}
         </p>
 
-        {/* Row 4: meta */}
-        <div className="text-[11px] text-muted-foreground/60 mt-2 flex items-center gap-1.5 flex-wrap">
+        <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground/60">
           {item.payload.pipeline && (
             <>
               <span>{item.payload.pipeline}</span>
-              <span>·</span>
+              <span>�</span>
             </>
           )}
           <span>{formatDistanceToNow(new Date(item.created_at))} ago</span>
         </div>
       </div>
 
-      {/* ── Action row (outside click area so buttons don't toggle expand) ── */}
       {isPending && (
-        <div
-          className="px-4 pb-4 flex items-center gap-2 flex-wrap"
-          onClick={(e) => e.stopPropagation()}
-        >
+        <div className="flex flex-wrap items-center gap-2 px-4 pb-4" onClick={(e) => e.stopPropagation()}>
           {hasActions && !showRejectInput && (
             <>
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-8 text-xs"
-                onClick={() => setShowRejectInput(true)}
-              >
+              <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => setShowRejectInput(true)}>
                 Reject
               </Button>
-              <Button
-                size="sm"
-                className="h-8 text-xs"
-                onClick={() => handleAction("approve")}
-                disabled={actionMutation.isPending}
-              >
+              <Button size="sm" className="h-8 text-xs" onClick={() => handleAction("approve")} disabled={actionMutation.isPending}>
                 Approve
               </Button>
             </>
           )}
 
           {hasActions && showRejectInput && (
-            <div className="flex items-center gap-2 w-full flex-wrap">
+            <div className="flex w-full flex-wrap items-center gap-2">
               <Input
                 placeholder="Reason for rejection..."
-                className="h-8 text-xs flex-1 min-w-[160px]"
+                className="h-8 min-w-[160px] flex-1 text-xs"
                 value={rejectReason}
                 onChange={(e) => setRejectReason(e.target.value)}
                 autoFocus
@@ -251,93 +223,61 @@ function InboxItemCard({ item }: { item: any }) {
                   else if (e.key === "Escape") setShowRejectInput(false);
                 }}
               />
-              <Button
-                size="sm"
-                variant="destructive"
-                className="h-8 px-3 text-xs shrink-0"
-                onClick={() => handleAction("reject", rejectReason)}
-                disabled={!rejectReason || actionMutation.isPending}
-              >
+              <Button size="sm" variant="destructive" className="h-8 shrink-0 px-3 text-xs" onClick={() => handleAction("reject", rejectReason)} disabled={!rejectReason || actionMutation.isPending}>
                 Confirm
               </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-8 px-2 shrink-0"
-                onClick={() => setShowRejectInput(false)}
-              >
-                <X className="w-3.5 h-3.5" />
+              <Button size="sm" variant="ghost" className="h-8 shrink-0 px-2" onClick={() => setShowRejectInput(false)}>
+                <X className="h-3.5 w-3.5" />
               </Button>
             </div>
           )}
 
           {isFyi && (
-            <Button
-              size="sm"
-              variant="secondary"
-              className="h-8 text-xs"
-              onClick={() => handleAction("read")}
-              disabled={actionMutation.isPending}
-            >
+            <Button size="sm" variant="secondary" className="h-8 text-xs" onClick={() => handleAction("read")} disabled={actionMutation.isPending}>
               Mark read
             </Button>
           )}
         </div>
       )}
 
-      {/* ── Expanded detail panel ── */}
       {expanded && (
-        <div className="px-4 pb-4 pt-3 border-t bg-muted/10 text-[13px] space-y-4">
+        <div className="space-y-4 border-t bg-muted/10 px-4 pb-4 pt-3 text-[13px]">
           {item.item_type === "campaign_brief" && (
-            <dl className="grid grid-cols-[auto_1fr] gap-y-3 gap-x-4">
+            <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-3">
               {Object.entries(item.payload).map(([key, value]) => {
                 if (key === "title" || key === "preview") return null;
                 return (
                   <div key={key} className="contents">
-                    <dt className="text-muted-foreground font-medium capitalize whitespace-nowrap">
-                      {key.replace(/_/g, " ")}
-                    </dt>
-                    <dd className="text-foreground break-words">{String(value)}</dd>
+                    <dt className="whitespace-nowrap font-medium capitalize text-muted-foreground">{key.replace(/_/g, " ")}</dt>
+                    <dd className="break-words text-foreground">{String(value)}</dd>
                   </div>
                 );
               })}
             </dl>
           )}
 
-          {(item.item_type === "weekly_report" ||
-            item.item_type === "campaign_report" ||
-            item.item_type === "suggestion") && (
+          {(item.item_type === "weekly_report" || item.item_type === "campaign_report" || item.item_type === "suggestion") && (
             <MarkdownBody content={item.payload.body || item.payload.report || ""} />
           )}
 
           {item.item_type === "escalation" && (
             <div className="space-y-3">
-              <div className="p-3 bg-red-50/50 border border-red-100 rounded-md">
-                <p className="text-xs font-medium text-red-800 mb-1">
-                  Original Comment ({item.payload.platform})
-                </p>
-                <p className="text-sm italic">"{item.payload.original_comment}"</p>
+              <div className="rounded-md border border-red-100 bg-red-50/50 p-3">
+                <p className="mb-1 text-xs font-medium text-red-800">Original Comment ({item.payload.platform})</p>
+                <p className="text-sm italic">&quot;{item.payload.original_comment}&quot;</p>
               </div>
               <div>
-                <p className="text-xs font-medium text-muted-foreground mb-1">Suggested Response</p>
-                <div className="p-3 bg-card border rounded-md text-sm">
+                <p className="mb-1 text-xs font-medium text-muted-foreground">Suggested Response</p>
+                <div className="rounded-md border bg-card p-3 text-sm">
                   <MarkdownBody content={item.payload.suggested_response || ""} />
                 </div>
               </div>
             </div>
           )}
 
-          {item.item_type === "ambassador_flag" && (
-            <MarkdownBody content={item.payload.body || item.payload.preview || ""} />
-          )}
+          {item.item_type === "ambassador_flag" && <MarkdownBody content={item.payload.body || item.payload.preview || ""} />}
         </div>
       )}
     </div>
   );
 }
-
-
-
-
-
-
