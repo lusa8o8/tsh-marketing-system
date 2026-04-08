@@ -1,0 +1,14 @@
+node_modules/
+dist/
+*.log
+.env.local
+M.A.S UI/.env.local
+M.A.S UI/node_modules/
+M.A.S UI/dist/
+M.A.S UI/vite-dev.log
+M.A.S UI/vite-dev.err.log
+set-secrets.ps1
+invoke-coordinator.ps1
+invoke-pipeline-a.ps1
+invoke-pipeline-b.ps1
+invoke-pipeline-c.ps1

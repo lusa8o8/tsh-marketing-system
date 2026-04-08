@@ -1,0 +1,517 @@
+// supabase/functions/pipeline-b-weekly/index.ts
+// ─────────────────────────────────────────────────────────────────────
+// Pipeline B — Weekly Publishing Engine
+// Runs on the configured run_day, invoked by the coordinator
+// ─────────────────────────────────────────────────────────────────────
+
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import Anthropic from 'https://esm.sh/@anthropic-ai/sdk@0.27.0'
+
+// ── types ─────────────────────────────────────────────────────────────
+interface NewContent {
+  id: string
+  type: 'youtube_video' | 'studyhub_resource'
+  title: string
+  description: string
+  url: string
+  subject: string
+  university_relevance: string[]
+}
+
+interface WeeklyPost {
+  platform: 'facebook' | 'whatsapp' | 'youtube' | 'email'
+  body: string
+  subject_line?: string
+  content_source?: string
+  scheduled_day: string
+}
+
+interface PipelineContext {
+  orgId: string
+  today: string
+  calendarEvents?: any[]
+}
+
+// ── org config helper ─────────────────────────────────────────────────
+async function getOrgConfig(supabase: any, orgId: string) {
+  const { data, error } = await supabase
+    .from('org_config')
+    .select('*')
+    .eq('org_id', orgId)
+    .single()
+  if (error) throw new Error(`Failed to load org config: ${error.message}`)
+  return data
+}
+
+// ── brand voice prompt builder ────────────────────────────────────────
+function buildSystemPrompt(brandVoice: any): string {
+  return `You are the social media voice for ${brandVoice.full_name} (${brandVoice.name}).
+${brandVoice.full_name} helps Zambian university students pass exams through YouTube tutorials and past papers.
+Target audience: ${brandVoice.target_audience}
+Tone: ${brandVoice.tone}
+Always: ${brandVoice.always_say.join(', ')}
+Never: ${brandVoice.never_say.join(', ')}
+Preferred CTA: ${brandVoice.cta_preference}
+Good post example: "${brandVoice.example_good_post}"
+Bad post example: "${brandVoice.example_bad_post}"`
+}
+
+// ── JSON extractor — handles markdown code fences safely ──────────────
+function extractJSON(text: string, fallback: string = '{}'): string {
+  try {
+    const firstBrace = text.indexOf('{')
+    const firstBracket = text.indexOf('[')
+    const lastBrace = text.lastIndexOf('}')
+    const lastBracket = text.lastIndexOf(']')
+
+    if (firstBracket !== -1 && (firstBracket < firstBrace || firstBrace === -1) && lastBracket !== -1) {
+      return text.slice(firstBracket, lastBracket + 1)
+    }
+    if (firstBrace !== -1 && lastBrace !== -1) {
+      return text.slice(firstBrace, lastBrace + 1)
+    }
+    return fallback
+  } catch {
+    return fallback
+  }
+}
+
+// ── mock new content feed ─────────────────────────────────────────────
+function getMockNewContent(): NewContent[] {
+  return [
+    {
+      id: 'yt_new_001',
+      type: 'youtube_video',
+      title: 'How to Ace Organic Chemistry — Full UNZA Exam Breakdown',
+      description: 'Complete walkthrough of the most common organic chemistry exam questions at UNZA and CBU.',
+      url: 'https://youtube.com/watch?v=example1',
+      subject: 'Chemistry',
+      university_relevance: ['UNZA', 'CBU', 'MU']
+    },
+    {
+      id: 'yt_new_002',
+      type: 'youtube_video',
+      title: 'Statistics Made Simple — Probability & Distributions',
+      description: 'Step by step guide to probability distributions and hypothesis testing.',
+      url: 'https://youtube.com/watch?v=example2',
+      subject: 'Statistics',
+      university_relevance: ['UNZA', 'ZCAS', 'CBU']
+    },
+    {
+      id: 'sh_new_001',
+      type: 'studyhub_resource',
+      title: 'UNZA Past Papers Pack — Economics 2019–2024',
+      description: '5 years of UNZA Economics past papers with detailed model answers.',
+      url: 'https://studyhub.com/resources/unza-economics-past-papers',
+      subject: 'Economics',
+      university_relevance: ['UNZA']
+    }
+  ]
+}
+
+// ── main handler ──────────────────────────────────────────────────────
+Deno.serve(async (req) => {
+  const supabase = createClient(
+    Deno.env.get('SUPABASE_URL')!,
+    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+  )
+  const anthropic = new Anthropic({
+    apiKey: Deno.env.get('ANTHROPIC_API_KEY')!
+  })
+
+  const context: PipelineContext = await req.json().catch(() => ({
+    orgId: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
+    today: new Date().toISOString().split('T')[0]
+  }))
+
+  const config = await getOrgConfig(supabase, context.orgId)
+
+  const results = {
+    content_items_found: 0,
+    posts_drafted: 0,
+    drafts_sent_for_approval: 0,
+    posts_published: 0,
+    ambassador_update_sent: false,
+    report_generated: false,
+    errors: [] as string[]
+  }
+
+  try {
+
+    // ── PARALLEL FETCH ─────────────────────────────────────────────────
+    console.log('Starting parallel fetch phase...')
+
+    const [metricsResult, calendarResult, contentResult] = await Promise.all([
+      supabase
+        .from('platform_metrics')
+        .select('*')
+        .eq('org_id', context.orgId)
+        .order('snapshot_date', { ascending: false })
+        .limit(8),
+
+      supabase
+        .from('academic_calendar')
+        .select('*')
+        .eq('org_id', context.orgId)
+        .eq('triggered', false)
+        .gte('event_date', context.today)
+        .lte('event_date', addDays(context.today, 21))
+        .order('event_date', { ascending: true }),
+
+      Promise.resolve({ data: getMockNewContent(), error: null })
+    ])
+
+    const lastWeekMetrics = metricsResult.data ?? []
+    const upcomingEvents = calendarResult.data ?? []
+    const newContent = contentResult.data ?? []
+
+    results.content_items_found = newContent.length
+    console.log(`Fetched: ${lastWeekMetrics.length} metric rows, ${upcomingEvents.length} upcoming events, ${newContent.length} new content items`)
+
+    // ── plan agent ─────────────────────────────────────────────────────
+    console.log('Running plan agent...')
+    const weeklyPlan = await runPlanAgent(
+      anthropic,
+      lastWeekMetrics,
+      upcomingEvents,
+      newContent,
+      context.today,
+      config.posting_limits
+    )
+    console.log(`Plan created: ${weeklyPlan.length} posts planned`)
+
+    // ── copy writer ────────────────────────────────────────────────────
+    console.log('Running copy writer...')
+    const draftedPosts: WeeklyPost[] = []
+
+    for (const planItem of weeklyPlan) {
+      const post = await runCopyWriter(anthropic, planItem, newContent, config.brand_voice)
+      draftedPosts.push(post)
+      results.posts_drafted++
+    }
+
+    // ── HUMAN GATE ─────────────────────────────────────────────────────
+    console.log('Sending drafts to human inbox for approval...')
+
+    for (const post of draftedPosts) {
+      const { data: registryRow } = await supabase
+        .from('content_registry')
+        .insert({
+          org_id: context.orgId,
+          platform: post.platform,
+          body: post.body,
+          subject_line: post.subject_line ?? null,
+          status: 'pending_approval',
+          scheduled_at: getScheduledTime(post.scheduled_day, context.today),
+          created_by: 'pipeline-b-weekly'
+        })
+        .select('id')
+        .single()
+
+      await supabase.from('human_inbox').insert({
+        org_id: context.orgId,
+        item_type: 'draft_approval',
+        priority: 'normal',
+        payload: {
+          platform: post.platform,
+          body: post.body,
+          subject_line: post.subject_line,
+          scheduled_day: post.scheduled_day,
+          content_source: post.content_source,
+          content_registry_id: registryRow?.id
+        },
+        created_by_pipeline: 'pipeline-b-weekly',
+        created_by_agent: 'copy-writer',
+        ref_table: 'content_registry',
+        ref_id: registryRow?.id
+      })
+
+      results.drafts_sent_for_approval++
+    }
+
+    console.log(`${results.drafts_sent_for_approval} drafts sent to human inbox`)
+
+    // ── PUBLISHER ──────────────────────────────────────────────────────
+    const { data: approvedPosts } = await supabase
+      .from('content_registry')
+      .select('*')
+      .eq('org_id', context.orgId)
+      .eq('status', 'approved')
+      .lte('scheduled_at', new Date().toISOString())
+
+    for (const post of (approvedPosts ?? [])) {
+      await supabase
+        .from('content_registry')
+        .update({ status: 'published', published_at: new Date().toISOString() })
+        .eq('id', post.id)
+
+      results.posts_published++
+    }
+
+    // ── AMBASSADOR UPDATE ──────────────────────────────────────────────
+    await runAmbassadorUpdate(supabase, anthropic, context, newContent, config.brand_voice)
+    results.ambassador_update_sent = true
+
+    // ── WEEKLY REPORT ──────────────────────────────────────────────────
+    await runReporter(supabase, anthropic, context, lastWeekMetrics, results)
+    results.report_generated = true
+
+    return new Response(
+      JSON.stringify({ ok: true, ...results }),
+      { headers: { 'Content-Type': 'application/json' } }
+    )
+
+  } catch (err) {
+    console.error('Pipeline B failed:', err)
+    return new Response(
+      JSON.stringify({ ok: false, error: (err as Error).message, ...results }),
+      { status: 500, headers: { 'Content-Type': 'application/json' } }
+    )
+  }
+})
+
+// ── plan agent ────────────────────────────────────────────────────────
+async function runPlanAgent(
+  anthropic: Anthropic,
+  metrics: any[],
+  upcomingEvents: any[],
+  newContent: NewContent[],
+  today: string,
+  postingLimits: any
+): Promise<any[]> {
+
+  const limitsStr = postingLimits
+    ? `Weekly posting limits per platform: ${JSON.stringify(postingLimits)}`
+    : 'Default: plan 5 posts across platforms.'
+
+  const response = await anthropic.messages.create({
+    model: 'claude-sonnet-4-5',
+    max_tokens: 800,
+    system: `You are the weekly content planner for TSH (Transcended Study Hub).
+TSH helps Zambian university students pass exams via YouTube tutorials and StudyHub past papers.
+
+${limitsStr}
+
+Respond with JSON only — an array of plan items:
+[
+  {
+    "platform": "facebook|whatsapp|youtube|email",
+    "content_id": "id of the new content to feature, or null for original",
+    "angle": "what angle or hook to use",
+    "scheduled_day": "monday|tuesday|wednesday|thursday|friday",
+    "goal": "awareness|trust|action|loyalty"
+  }
+]`,
+    messages: [{
+      role: 'user',
+      content: `Today: ${today}
+
+New content available:
+${JSON.stringify(newContent, null, 2)}
+
+Upcoming events (next 21 days):
+${JSON.stringify(upcomingEvents.map(e => ({
+  label: e.label,
+  date: e.event_date,
+  type: e.event_type,
+  universities: e.universities
+})), null, 2)}
+
+Last week metrics:
+${JSON.stringify(metrics.slice(0, 4).map(m => ({
+  platform: m.platform,
+  engagement: m.engagement,
+  reach: m.post_reach
+})), null, 2)}
+
+Create this week's content plan.`
+    }]
+  })
+
+  const raw = response.content[0].type === 'text' ? response.content[0].text : '[]'
+  try {
+    return JSON.parse(extractJSON(raw, '[]'))
+  } catch (e) {
+    console.error('Plan agent JSON parse failed:', e)
+    return []
+  }
+}
+
+// ── copy writer ───────────────────────────────────────────────────────
+async function runCopyWriter(
+  anthropic: Anthropic,
+  planItem: any,
+  newContent: NewContent[],
+  brandVoice: any
+): Promise<WeeklyPost> {
+
+  const featuredContent = newContent.find(c => c.id === planItem.content_id)
+
+  const response = await anthropic.messages.create({
+    model: 'claude-sonnet-4-5',
+    max_tokens: 300,
+    system: `${buildSystemPrompt(brandVoice)}
+
+For email: include a subject line on the first line starting with "Subject: "
+For WhatsApp: keep under 200 characters, conversational
+For Facebook: 2-3 sentences, engaging hook, emoji ok
+For YouTube community: short, drives comments
+
+Write the post copy only — no preamble.`,
+    messages: [{
+      role: 'user',
+      content: `Write a ${planItem.platform} post.
+Goal: ${planItem.goal}
+Angle: ${planItem.angle}
+Scheduled: ${planItem.scheduled_day}
+${featuredContent
+  ? `Featured content:\nTitle: ${featuredContent.title}\nURL: ${featuredContent.url}`
+  : 'No specific content — write an original engagement post.'}`
+    }]
+  })
+
+  const body = response.content[0].type === 'text'
+    ? response.content[0].text.trim()
+    : ''
+
+  let subject_line: string | undefined
+  let postBody = body
+  if (planItem.platform === 'email' && body.startsWith('Subject: ')) {
+    const lines = body.split('\n')
+    subject_line = lines[0].replace('Subject: ', '').trim()
+    postBody = lines.slice(1).join('\n').trim()
+  }
+
+  return {
+    platform: planItem.platform,
+    body: postBody,
+    subject_line,
+    content_source: featuredContent?.url,
+    scheduled_day: planItem.scheduled_day
+  }
+}
+
+// ── ambassador update ─────────────────────────────────────────────────
+async function runAmbassadorUpdate(
+  supabase: any,
+  anthropic: Anthropic,
+  context: PipelineContext,
+  newContent: NewContent[],
+  brandVoice: any
+) {
+  const { data: ambassadors } = await supabase
+    .from('ambassador_registry')
+    .select('*')
+    .eq('org_id', context.orgId)
+    .eq('status', 'active')
+
+  if (!ambassadors || ambassadors.length === 0) {
+    console.log('No active ambassadors to update')
+    return
+  }
+
+  const response = await anthropic.messages.create({
+    model: 'claude-sonnet-4-5',
+    max_tokens: 200,
+    system: `${buildSystemPrompt(brandVoice)}
+
+Write a brief weekly update message for TSH student ambassadors.
+Keep it energetic, under 150 words. Include new content to share and remind them to report weekly reach numbers.`,
+    messages: [{
+      role: 'user',
+      content: `New content this week:\n${newContent.map(c => `- ${c.title} (${c.subject})`).join('\n')}\n\nWrite the ambassador update message.`
+    }]
+  })
+
+  const updateMessage = response.content[0].type === 'text'
+    ? response.content[0].text.trim()
+    : 'Hey TSH ambassadors! New content is live this week. Share it with your campus groups!'
+
+  console.log(`Ambassador update drafted for ${ambassadors.length} ambassadors (mock send)`)
+
+  await supabase.from('content_registry').insert({
+    org_id: context.orgId,
+    platform: 'whatsapp',
+    body: updateMessage,
+    status: 'published',
+    published_at: new Date().toISOString(),
+    created_by: 'pipeline-b-ambassador-update'
+  })
+
+  for (const ambassador of ambassadors) {
+    await supabase
+      .from('ambassador_registry')
+      .update({ last_content_sent: new Date().toISOString() })
+      .eq('id', ambassador.id)
+  }
+}
+
+// ── reporter ──────────────────────────────────────────────────────────
+async function runReporter(
+  supabase: any,
+  anthropic: Anthropic,
+  context: PipelineContext,
+  metrics: any[],
+  pipelineResults: any
+) {
+  const response = await anthropic.messages.create({
+    model: 'claude-sonnet-4-5',
+    max_tokens: 500,
+    system: `You write concise weekly marketing reports for the CEO of TSH.
+Plain text, under 200 words. Cover: what was done, key numbers, what worked, what didn't, plan for next week.`,
+    messages: [{
+      role: 'user',
+      content: `Week ending: ${context.today}
+Posts drafted: ${pipelineResults.posts_drafted}
+Drafts for approval: ${pipelineResults.drafts_sent_for_approval}
+Published: ${pipelineResults.posts_published}
+Ambassador update sent: ${pipelineResults.ambassador_update_sent}
+
+Metrics:
+${metrics.slice(0, 4).map((m: any) =>
+  `${m.platform}: ${m.followers} followers, ${m.post_reach} reach, ${m.engagement} engagement, ${m.signups} sign-ups`
+).join('\n')}
+
+Write the weekly report.`
+    }]
+  })
+
+  const reportText = response.content[0].type === 'text'
+    ? response.content[0].text.trim()
+    : 'Weekly report unavailable.'
+
+  await supabase.from('human_inbox').insert({
+    org_id: context.orgId,
+    item_type: 'weekly_report',
+    priority: 'fyi',
+    payload: {
+      report: reportText,
+      week_ending: context.today,
+      metrics_snapshot: metrics.slice(0, 4),
+      pipeline_results: pipelineResults
+    },
+    created_by_pipeline: 'pipeline-b-weekly',
+    created_by_agent: 'reporter'
+  })
+
+  console.log('Weekly report sent to human inbox')
+}
+
+// ── helpers ───────────────────────────────────────────────────────────
+function addDays(dateStr: string, days: number): string {
+  const d = new Date(dateStr)
+  d.setDate(d.getDate() + days)
+  return d.toISOString().split('T')[0]
+}
+
+function getScheduledTime(day: string, today: string): string {
+  const days = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday']
+  const todayDate = new Date(today)
+  const todayDay = todayDate.getDay()
+  const targetDay = days.indexOf(day.toLowerCase())
+  const daysUntil = (targetDay - todayDay + 7) % 7 || 7
+  const scheduled = new Date(todayDate)
+  scheduled.setDate(scheduled.getDate() + daysUntil)
+  scheduled.setHours(9, 0, 0, 0)
+  return scheduled.toISOString()
+}
