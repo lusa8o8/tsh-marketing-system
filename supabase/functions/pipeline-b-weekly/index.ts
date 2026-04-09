@@ -7,6 +7,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import Anthropic from 'https://esm.sh/@anthropic-ai/sdk@0.27.0'
 import { getAgentDefinition } from '../_shared/agent-registry.ts'
+import { getIntegrationDefinition } from '../_shared/integration-registry.ts'
 
 // ── types ─────────────────────────────────────────────────────────────
 interface NewContent {
@@ -432,7 +433,7 @@ Keep it energetic, under 150 words. Include new content to share and remind them
 
   await supabase.from('content_registry').insert({
     org_id: context.orgId,
-    platform: 'whatsapp',
+    platform: getIntegrationDefinition('whatsapp').id,
     body: updateMessage,
     status: 'published',
     published_at: new Date().toISOString(),

@@ -1,4 +1,5 @@
 import { getAgentDefinition } from '../_shared/agent-registry.ts'
+import { getIntegrationDefinition } from '../_shared/integration-registry.ts'
 import { PIPELINE_RUN_STATUS, type PipelineRunStatus } from '../_shared/pipeline-run-status.ts'
 // supabase/functions/pipeline-a-engagement/index.ts
 // ─────────────────────────────────────────────────────────────────────
@@ -91,7 +92,7 @@ function getMockComments(): Comment[] {
   return [
     {
       id: 'fb_001',
-      platform: 'facebook',
+      platform: getIntegrationDefinition('facebook').id,
       author: 'Chanda Mwale',
       text: 'This is so helpful! I passed my calculus exam because of TSH 🙌',
       post_id: 'post_123',
@@ -99,7 +100,7 @@ function getMockComments(): Comment[] {
     },
     {
       id: 'fb_002',
-      platform: 'facebook',
+      platform: getIntegrationDefinition('facebook').id,
       author: 'Mutale Banda',
       text: 'How do I access the past papers on StudyHub? I cant find them',
       post_id: 'post_123',
@@ -107,7 +108,7 @@ function getMockComments(): Comment[] {
     },
     {
       id: 'fb_003',
-      platform: 'facebook',
+      platform: getIntegrationDefinition('facebook').id,
       author: 'Angry Student',
       text: 'This is a scam! I paid and got nothing. Terrible service!!',
       post_id: 'post_123',
@@ -115,7 +116,7 @@ function getMockComments(): Comment[] {
     },
     {
       id: 'yt_001',
-      platform: 'youtube',
+      platform: getIntegrationDefinition('youtube').id,
       author: 'Lombe Phiri',
       text: 'Please can you do a video on organic chemistry? We are suffering 😭',
       post_id: 'video_456',
@@ -123,7 +124,7 @@ function getMockComments(): Comment[] {
     },
     {
       id: 'yt_002',
-      platform: 'youtube',
+      platform: getIntegrationDefinition('youtube').id,
       author: 'Natasha K',
       text: 'I shared this with my whole class at UNZA. Everyone loves it!',
       post_id: 'video_456',
@@ -131,7 +132,7 @@ function getMockComments(): Comment[] {
     },
     {
       id: 'wa_001',
-      platform: 'whatsapp',
+      platform: getIntegrationDefinition('whatsapp').id,
       author: 'Brian Mwanza',
       text: 'When is the next exam prep session?',
       post_id: 'channel_789',
@@ -139,7 +140,7 @@ function getMockComments(): Comment[] {
     },
     {
       id: 'wa_002',
-      platform: 'whatsapp',
+      platform: getIntegrationDefinition('whatsapp').id,
       author: 'Spam Account',
       text: 'Make money online!! Click here bit.ly/scam123 🤑🤑🤑',
       post_id: 'channel_789',
@@ -276,10 +277,10 @@ Deno.serve(async (req) => {
 
     // ── 4. write daily metric snapshot ───────────────────────────────
     const mockMetrics = [
-      { platform: 'facebook',  followers: 3420, post_reach: 287, engagement: 43, signups: 12 },
-      { platform: 'whatsapp',  followers: 1850, post_reach: 412, engagement: 28, signups: 8  },
-      { platform: 'youtube',   followers: 8930, post_reach: 634, engagement: 91, signups: 19 },
-      { platform: 'email',     followers: 720,  post_reach: 310, engagement: 22, signups: 5,
+      { platform: getIntegrationDefinition('facebook').id,  followers: 3420, post_reach: 287, engagement: 43, signups: 12 },
+      { platform: getIntegrationDefinition('whatsapp').id,  followers: 1850, post_reach: 412, engagement: 28, signups: 8  },
+      { platform: getIntegrationDefinition('youtube').id,   followers: 8930, post_reach: 634, engagement: 91, signups: 19 },
+      { platform: getIntegrationDefinition('email').id,     followers: 720,  post_reach: 310, engagement: 22, signups: 5,
         email_open_rate: 34.2 }
     ]
 
@@ -402,7 +403,7 @@ async function postDailyPoll(
 
   const pollText = `What would help you most this week from ${brandVoice.name}? A) Past papers B) Video walkthroughs C) Quick revision tips`
 
-  for (const platform of ['facebook', 'whatsapp'] as const) {
+  for (const platform of [getIntegrationDefinition('facebook').id, getIntegrationDefinition('whatsapp').id] as const) {
     await supabase.from('content_registry').insert({
       org_id: context.orgId,
       platform,

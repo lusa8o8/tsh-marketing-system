@@ -7,6 +7,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import Anthropic from 'https://esm.sh/@anthropic-ai/sdk@0.27.0'
 import { getAgentDefinition } from '../_shared/agent-registry.ts'
+import { getIntegrationDefinition } from '../_shared/integration-registry.ts'
 
 // ── types ─────────────────────────────────────────────────────────────
 interface CalendarEvent {
@@ -418,12 +419,12 @@ async function runCopyWriter(
 ): Promise<any[]> {
 
   const platforms = [
-    { platform: 'facebook', instruction: '2-3 sentences, engaging hook, emoji ok, end with StudyHub link' },
-    { platform: 'facebook', instruction: 'different angle from first post, focus on social proof or urgency' },
-    { platform: 'whatsapp', instruction: 'under 200 characters, conversational, one clear call to action' },
-    { platform: 'youtube', instruction: 'short community post, ask a question to drive comments' },
-    { platform: 'email', instruction: 'start first line with Subject: then write email body, warm and helpful' },
-    { platform: 'whatsapp', instruction: 'ambassador talking points — bullet list of what to say to classmates' },
+    { platform: getIntegrationDefinition('facebook').id, instruction: '2-3 sentences, engaging hook, emoji ok, end with StudyHub link' },
+    { platform: getIntegrationDefinition('facebook').id, instruction: 'different angle from first post, focus on social proof or urgency' },
+    { platform: getIntegrationDefinition('whatsapp').id, instruction: 'under 200 characters, conversational, one clear call to action' },
+    { platform: getIntegrationDefinition('youtube').id, instruction: 'short community post, ask a question to drive comments' },
+    { platform: getIntegrationDefinition('email').id, instruction: 'start first line with Subject: then write email body, warm and helpful' },
+    { platform: getIntegrationDefinition('whatsapp').id, instruction: 'ambassador talking points ? bullet list of what to say to classmates' },
   ]
 
   const assets: any[] = []
