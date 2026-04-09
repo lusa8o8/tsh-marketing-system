@@ -360,6 +360,30 @@ async function readFunctionError(error: unknown) {
   return "The request failed.";
 }
 
+async function requestPipelineBResume() {
+  const accessToken = await getAccessToken();
+
+  if (!accessToken) {
+    throw new Error("Your session expired. Please sign in again.");
+  }
+
+  const { error } = await supabase.functions.invoke("coordinator-chat", {
+    body: {
+      message: "resume pipeline b",
+      history: [],
+      confirmationAction: null,
+      orgId: ORG_ID,
+    },
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+
+  if (error) {
+    throw error;
+  }
+}
+
 export function getGetInboxSummaryQueryKey() {
   return ["inbox-summary", ORG_ID] as const;
 }
@@ -472,6 +496,10 @@ export function useActionInboxItem(options?: MutationHookOptions) {
 
           if (contentError) throw contentError;
         }
+
+        if (inboxRow.created_by_pipeline === "pipeline-b-weekly") {
+          await requestPipelineBResume();
+        }
       }
 
       return { id, action: data.action };
@@ -530,6 +558,15 @@ export function useRetryContent(options?: MutationHookOptions) {
 export function useActionContent(options?: MutationHookOptions) {
   return useMutation({
     mutationFn: async ({ id, data }: { id: string; data: { action: "approve" | "reject" } }) => {
+      const { data: relatedInboxRows, error: relatedInboxError } = await supabase
+        .from("human_inbox")
+        .select("id, created_by_pipeline")
+        .eq("ref_id", id)
+        .eq("item_type", "draft_approval")
+        .eq("org_id", ORG_ID);
+
+      if (relatedInboxError) throw relatedInboxError;
+
       const patch =
         data.action === "approve"
           ? { status: "scheduled", approved_at: new Date().toISOString(), error_message: null }
@@ -554,6 +591,11 @@ export function useActionContent(options?: MutationHookOptions) {
         .eq("org_id", ORG_ID);
 
       if (inboxError) throw inboxError;
+
+      if ((relatedInboxRows ?? []).some((row) => row.created_by_pipeline === "pipeline-b-weekly")) {
+        await requestPipelineBResume();
+      }
+
       return { id, action: data.action };
     },
     ...options?.mutation,

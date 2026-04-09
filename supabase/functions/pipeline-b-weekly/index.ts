@@ -8,6 +8,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import Anthropic from 'https://esm.sh/@anthropic-ai/sdk@0.27.0'
 import { getAgentDefinition } from '../_shared/agent-registry.ts'
 import { getIntegrationDefinition } from '../_shared/integration-registry.ts'
+import { PIPELINE_RUN_STATUS } from '../_shared/pipeline-run-status.ts'
 
 // ── types ─────────────────────────────────────────────────────────────
 interface NewContent {
@@ -128,8 +129,19 @@ Deno.serve(async (req) => {
     calendarEvents: Array.isArray(payload?.calendarEvents) ? payload.calendarEvents : undefined
   }
 
+  const resumeRunId = typeof payload?.resume_run_id === 'string'
+    ? payload.resume_run_id
+    : typeof payload?.resumeRunId === 'string'
+      ? payload.resumeRunId
+      : null
+
   const config = await getOrgConfig(supabase, context.orgId)
 
+  if (resumeRunId) {
+    return await resumePipelineBRun({ supabase, anthropic, context, config, runId: resumeRunId })
+  }
+
+  let runId: string | null = null
   const results = {
     content_items_found: 0,
     posts_drafted: 0,
@@ -137,12 +149,13 @@ Deno.serve(async (req) => {
     posts_published: 0,
     ambassador_update_sent: false,
     report_generated: false,
-    errors: [] as string[]
+    errors: [] as string[],
+    draft_content_ids: [] as string[]
   }
 
   try {
+    runId = await createPipelineBRun(supabase, context.orgId)
 
-    // ── PARALLEL FETCH ─────────────────────────────────────────────────
     console.log('Starting parallel fetch phase...')
 
     const [metricsResult, calendarResult, contentResult] = await Promise.all([
@@ -172,7 +185,6 @@ Deno.serve(async (req) => {
     results.content_items_found = newContent.length
     console.log(`Fetched: ${lastWeekMetrics.length} metric rows, ${upcomingEvents.length} upcoming events, ${newContent.length} new content items`)
 
-    // ── plan agent ─────────────────────────────────────────────────────
     console.log('Running plan agent...')
     const weeklyPlan = await runPlanAgent(
       anthropic,
@@ -184,7 +196,6 @@ Deno.serve(async (req) => {
     )
     console.log(`Plan created: ${weeklyPlan.length} posts planned`)
 
-    // ── copy writer ────────────────────────────────────────────────────
     console.log('Running copy writer...')
     const draftedPosts: WeeklyPost[] = []
 
@@ -194,7 +205,6 @@ Deno.serve(async (req) => {
       results.posts_drafted++
     }
 
-    // ── HUMAN GATE ─────────────────────────────────────────────────────
     console.log('Sending drafts to human inbox for approval...')
 
     for (const post of draftedPosts) {
@@ -212,6 +222,10 @@ Deno.serve(async (req) => {
         .select('id')
         .single()
 
+      if (registryRow?.id) {
+        results.draft_content_ids.push(registryRow.id)
+      }
+
       await supabase.from('human_inbox').insert({
         org_id: context.orgId,
         item_type: 'draft_approval',
@@ -222,7 +236,8 @@ Deno.serve(async (req) => {
           subject_line: post.subject_line,
           scheduled_day: post.scheduled_day,
           content_source: post.content_source,
-          content_registry_id: registryRow?.id
+          content_registry_id: registryRow?.id,
+          pipeline_run_id: runId
         },
         created_by_pipeline: 'pipeline-b-weekly',
         created_by_agent: getAgentDefinition('copy_writer').id,
@@ -235,46 +250,231 @@ Deno.serve(async (req) => {
 
     console.log(`${results.drafts_sent_for_approval} drafts sent to human inbox`)
 
-    // ── PUBLISHER ──────────────────────────────────────────────────────
-    const { data: approvedPosts } = await supabase
-      .from('content_registry')
-      .select('*')
-      .eq('org_id', context.orgId)
-      .eq('status', 'approved')
-      .lte('scheduled_at', new Date().toISOString())
-
-    for (const post of (approvedPosts ?? [])) {
-      await supabase
-        .from('content_registry')
-        .update({ status: 'published', published_at: new Date().toISOString() })
-        .eq('id', post.id)
-
-      results.posts_published++
-    }
-
-    // ── AMBASSADOR UPDATE ──────────────────────────────────────────────
-    await runAmbassadorUpdate(supabase, anthropic, context, newContent, config.brand_voice)
-    results.ambassador_update_sent = true
-
-    // ── WEEKLY REPORT ──────────────────────────────────────────────────
-    await runReporter(supabase, anthropic, context, lastWeekMetrics, results)
-    results.report_generated = true
-
-    return new Response(
-      JSON.stringify({ ok: true, ...results }),
-      { headers: { 'Content-Type': 'application/json' } }
+    await updatePipelineBRun(
+      supabase,
+      runId,
+      PIPELINE_RUN_STATUS.WAITING_HUMAN,
+      results
     )
 
+    return new Response(
+      JSON.stringify({ ok: true, waiting_human: true, run_id: runId, ...results }),
+      { headers: { 'Content-Type': 'application/json' } }
+    )
   } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    results.errors.push(message)
+    await updatePipelineBRun(
+      supabase,
+      runId,
+      PIPELINE_RUN_STATUS.FAILED,
+      { ...results, error: message }
+    )
     console.error('Pipeline B failed:', err)
     return new Response(
-      JSON.stringify({ ok: false, error: (err as Error).message, ...results }),
+      JSON.stringify({ ok: false, error: message, run_id: runId, ...results }),
       { status: 500, headers: { 'Content-Type': 'application/json' } }
     )
   }
 })
 
-// ── plan agent ────────────────────────────────────────────────────────
+async function createPipelineBRun(supabase: any, orgId: string) {
+  const { data, error } = await supabase
+    .from('pipeline_runs')
+    .insert({
+      org_id: orgId,
+      pipeline: 'pipeline-b-weekly',
+      status: PIPELINE_RUN_STATUS.RUNNING,
+      started_at: new Date().toISOString(),
+    })
+    .select('id')
+    .single()
+
+  if (error) throw new Error(`Failed to create Pipeline B run: ${error.message}`)
+  return data?.id as string
+}
+
+async function loadPipelineBRun(supabase: any, orgId: string, runId: string) {
+  const { data, error } = await supabase
+    .from('pipeline_runs')
+    .select('*')
+    .eq('id', runId)
+    .eq('org_id', orgId)
+    .eq('pipeline', 'pipeline-b-weekly')
+    .single()
+
+  if (error) throw new Error(`Failed to load Pipeline B run: ${error.message}`)
+  return data
+}
+
+async function updatePipelineBRun(
+  supabase: any,
+  runId: string,
+  status: string,
+  result: Record<string, unknown>,
+) {
+  const patch: Record<string, unknown> = {
+    status,
+    result,
+  }
+
+  if (
+    status === PIPELINE_RUN_STATUS.SUCCESS
+    || status === PIPELINE_RUN_STATUS.FAILED
+    || status === PIPELINE_RUN_STATUS.CANCELLED
+  ) {
+    patch.finished_at = new Date().toISOString()
+  }
+
+  const { error } = await supabase
+    .from('pipeline_runs')
+    .update(patch)
+    .eq('id', runId)
+
+  if (error) throw new Error(`Failed to update Pipeline B run: ${error.message}`)
+}
+
+async function resumePipelineBRun(params: {
+  supabase: any
+  anthropic: Anthropic
+  context: PipelineContext
+  config: any
+  runId: string
+}) {
+  const { supabase, anthropic, context, config, runId } = params
+  const run = await loadPipelineBRun(supabase, context.orgId, runId)
+
+  if (run.status === PIPELINE_RUN_STATUS.SUCCESS || run.status === PIPELINE_RUN_STATUS.CANCELLED) {
+    return new Response(
+      JSON.stringify({ ok: true, already_final: true, run_id: runId, ...(run.result ?? {}) }),
+      { headers: { 'Content-Type': 'application/json' } }
+    )
+  }
+
+  if (run.status !== PIPELINE_RUN_STATUS.WAITING_HUMAN && run.status !== PIPELINE_RUN_STATUS.RESUMED) {
+    return new Response(
+      JSON.stringify({ ok: false, error: `Pipeline B run ${runId} is not resumable from status ${run.status}` }),
+      { status: 409, headers: { 'Content-Type': 'application/json' } }
+    )
+  }
+
+  const stored = (run.result ?? {}) as Record<string, any>
+  const results = {
+    content_items_found: stored.content_items_found ?? 0,
+    posts_drafted: stored.posts_drafted ?? 0,
+    drafts_sent_for_approval: stored.drafts_sent_for_approval ?? 0,
+    posts_published: stored.posts_published ?? 0,
+    ambassador_update_sent: stored.ambassador_update_sent ?? false,
+    report_generated: stored.report_generated ?? false,
+    errors: Array.isArray(stored.errors) ? stored.errors : [],
+    draft_content_ids: Array.isArray(stored.draft_content_ids) ? stored.draft_content_ids : []
+  }
+
+  await updatePipelineBRun(
+    supabase,
+    runId,
+    PIPELINE_RUN_STATUS.RESUMED,
+    results
+  )
+
+  try {
+    const { data: draftRows, error: draftsError } = await supabase
+      .from('content_registry')
+      .select('*')
+      .eq('org_id', context.orgId)
+      .in('id', results.draft_content_ids)
+
+    if (draftsError) throw new Error(`Failed to load Pipeline B drafts: ${draftsError.message}`)
+
+    const drafts = draftRows ?? []
+    const pendingDrafts = drafts.filter((row: any) => row.status === 'pending_approval' || row.status === 'draft')
+    if (pendingDrafts.length > 0) {
+      await updatePipelineBRun(
+        supabase,
+        runId,
+        PIPELINE_RUN_STATUS.WAITING_HUMAN,
+        results
+      )
+
+      return new Response(
+        JSON.stringify({ ok: true, waiting_human: true, pending_drafts: pendingDrafts.length, run_id: runId, ...results }),
+        { headers: { 'Content-Type': 'application/json' } }
+      )
+    }
+
+    const approvedDrafts = drafts.filter((row: any) => row.status === 'scheduled' || row.status === 'approved')
+    if (approvedDrafts.length === 0) {
+      await updatePipelineBRun(
+        supabase,
+        runId,
+        PIPELINE_RUN_STATUS.CANCELLED,
+        results
+      )
+
+      return new Response(
+        JSON.stringify({ ok: true, cancelled: true, run_id: runId, ...results }),
+        { headers: { 'Content-Type': 'application/json' } }
+      )
+    }
+
+    const { data: lastWeekMetrics, error: metricsError } = await supabase
+      .from('platform_metrics')
+      .select('*')
+      .eq('org_id', context.orgId)
+      .order('snapshot_date', { ascending: false })
+      .limit(8)
+
+    if (metricsError) throw new Error(`Failed to reload metrics for Pipeline B resume: ${metricsError.message}`)
+
+    const now = Date.now()
+    const duePosts = approvedDrafts.filter((row: any) => !row.scheduled_at || new Date(row.scheduled_at).getTime() <= now)
+    for (const post of duePosts) {
+      await supabase
+        .from('content_registry')
+        .update({ status: 'published', published_at: new Date().toISOString() })
+        .eq('id', post.id)
+      results.posts_published += 1
+    }
+
+    if (!results.ambassador_update_sent) {
+      await runAmbassadorUpdate(supabase, anthropic, context, getMockNewContent(), config.brand_voice)
+      results.ambassador_update_sent = true
+    }
+
+    if (!results.report_generated) {
+      await runReporter(supabase, anthropic, context, lastWeekMetrics ?? [], results)
+      results.report_generated = true
+    }
+
+    await updatePipelineBRun(
+      supabase,
+      runId,
+      PIPELINE_RUN_STATUS.SUCCESS,
+      results
+    )
+
+    return new Response(
+      JSON.stringify({ ok: true, resumed: true, run_id: runId, ...results }),
+      { headers: { 'Content-Type': 'application/json' } }
+    )
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    results.errors.push(message)
+    await updatePipelineBRun(
+      supabase,
+      runId,
+      PIPELINE_RUN_STATUS.FAILED,
+      { ...results, error: message }
+    )
+
+    return new Response(
+      JSON.stringify({ ok: false, error: message, run_id: runId, ...results }),
+      { status: 500, headers: { 'Content-Type': 'application/json' } }
+    )
+  }
+}
+
+// plan agent ────────────────────────────────────────────────────────
 async function runPlanAgent(
   anthropic: Anthropic,
   metrics: any[],

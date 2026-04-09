@@ -118,6 +118,7 @@ Add resumable human-gate execution for Pipeline B without widening scope into Pi
    - keep the first resumable-gate slice narrow and reversible
 5. Verify:
    - initial Pipeline B run pauses cleanly in `waiting_human`
+   - direct hosted resume returns `waiting_human` again while drafts are still pending
    - approval or rejection flows trigger resume through scheduler-backed behavior
    - completed runs exit cleanly to `success` or `cancelled` without breaking Inbox or Content review UX
    - reporting still lands in Inbox
@@ -166,8 +167,11 @@ Add resumable human-gate execution for Pipeline B without widening scope into Pi
 - browser parity for Milestone 4 was verified after running Pipeline A from `/samm`
 - engine-backed Pipeline A was deployed and matched the previous hosted parity baseline exactly
 - Milestone 5A is already complete and pushed
+- Milestone 6 now has a hosted initial-run pause and direct resume baseline working for Pipeline B
 - the current active build slice is Milestone 6 for Pipeline B resumable human gates
 - if a resumed session breaks mid-build, reread the docs first and verify git state before continuing
+- latest hosted Milestone 6 verification: direct `pipeline-b-weekly` invoke returns `waiting_human: true`, and direct `resume_run_id` invoke returns `waiting_human: true` with pending drafts; browser-authenticated `coordinator-chat` resume is still the remaining verification gap because anon invocation fails with `missing sub claim`
+- the schema slice for Milestone 6 now exists in `supabase/migrations/20260409161000_pipeline_runs_status_states.sql` and was applied with `supabase db push`
 - the current local environment did not have `deno` installed, so local `deno check` was not available during parity verification
 
 ## Constraints To Preserve

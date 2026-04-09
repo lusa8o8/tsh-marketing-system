@@ -148,14 +148,17 @@ export async function expireStaleRuns(supabase: any, rows: any[]) {
   )
 }
 
-async function invokePipeline(supabase: any, pipelineId: string, orgId: string) {
+async function invokePipeline(supabase: any, pipelineId: string, orgId: string, body: Record<string, unknown> = {}) {
   const functionName = PIPELINE_TARGETS[pipelineId]
   if (!functionName) {
     throw new Error(`Unknown pipeline target: ${pipelineId}`)
   }
 
   const { data, error } = await supabase.functions.invoke(functionName, {
-    body: { org_id: orgId },
+    body: {
+      org_id: orgId,
+      ...body,
+    },
   })
 
   if (error) {
@@ -297,6 +300,19 @@ async function schedulePipelineRun(supabase: any, pipeline: PipelineTarget, orgI
     }
   }
 
+  if (refreshedRun?.status === PIPELINE_RUN_STATUS.WAITING_HUMAN) {
+    return {
+      message: `${pipeline.title} is waiting on human approval before it can continue.`,
+      suggestions: ['What needs my approval?', 'Check pipeline results', 'Summarize this week'],
+      invoked_action: {
+        type: 'run_pipeline',
+        pipeline: pipeline.id,
+        status: PIPELINE_RUN_STATUS.WAITING_HUMAN,
+        run_id: refreshedRun.id ?? null,
+      },
+    }
+  }
+
   if (refreshedRun?.status === PIPELINE_RUN_STATUS.SUCCESS) {
     return {
       message: `${pipeline.title} completed successfully. ${refreshedRun.result_summary ?? refreshedRun.result?.error ?? 'The latest run is now reflected in workspace state.'}`,
@@ -322,6 +338,80 @@ async function schedulePipelineRun(supabase: any, pipeline: PipelineTarget, orgI
   }
 }
 
+async function resumePipelineRun(supabase: any, pipeline: PipelineTarget, orgId: string, runs: any[]): Promise<ChatResponse> {
+  const latestRun = getLatestPipelineRun(runs, pipeline.id)
+
+  if (latestRun?.status !== PIPELINE_RUN_STATUS.WAITING_HUMAN) {
+    return formatPipelineStatusResponse(pipeline, latestRun)
+  }
+
+  await invokePipeline(supabase, pipeline.id, orgId, { resume_run_id: latestRun.id })
+  const refreshedRun = await fetchLatestPipelineRun(supabase, orgId, pipeline.id)
+
+  if (refreshedRun?.status === PIPELINE_RUN_STATUS.WAITING_HUMAN) {
+    return {
+      message: `${pipeline.title} is still waiting on human approval before it can continue.`,
+      suggestions: ['What needs my approval?', 'Check pipeline results', 'Summarize this week'],
+      invoked_action: {
+        type: 'run_pipeline',
+        pipeline: pipeline.id,
+        status: PIPELINE_RUN_STATUS.WAITING_HUMAN,
+        run_id: refreshedRun.id ?? null,
+      },
+    }
+  }
+
+  if (refreshedRun?.status === PIPELINE_RUN_STATUS.SUCCESS) {
+    return {
+      message: `${pipeline.title} resumed and completed successfully. ${refreshedRun.result_summary ?? refreshedRun.result?.error ?? 'The latest run is now reflected in workspace state.'}`,
+      suggestions: ['Check pipeline results', 'What needs my approval?', 'Summarize this week'],
+      invoked_action: {
+        type: 'run_pipeline',
+        pipeline: pipeline.id,
+        status: 'completed',
+        run_id: refreshedRun.id ?? null,
+      },
+    }
+  }
+
+  if (refreshedRun?.status === PIPELINE_RUN_STATUS.CANCELLED) {
+    return {
+      message: `${pipeline.title} resumed and exited without approved drafts. ${refreshedRun.result_summary ?? 'All review items were rejected.'}`,
+      suggestions: ['Check pipeline results', 'What needs my approval?', 'Summarize this week'],
+      invoked_action: {
+        type: 'run_pipeline',
+        pipeline: pipeline.id,
+        status: PIPELINE_RUN_STATUS.CANCELLED,
+        run_id: refreshedRun.id ?? null,
+      },
+    }
+  }
+
+  if (refreshedRun?.status === PIPELINE_RUN_STATUS.FAILED) {
+    return {
+      message: `${pipeline.title} failed while resuming. ${refreshedRun.result?.error ?? 'No failure summary recorded.'}`,
+      suggestions: ['Check pipeline results', 'What needs my approval?', 'Summarize this week'],
+      invoked_action: {
+        type: 'run_pipeline',
+        pipeline: pipeline.id,
+        status: PIPELINE_RUN_STATUS.FAILED,
+        run_id: refreshedRun.id ?? null,
+      },
+    }
+  }
+
+  return {
+    message: `${pipeline.title} has resumed and is now running.`,
+    suggestions: ['Check pipeline results', 'What needs my approval?', 'Summarize this week'],
+    invoked_action: {
+      type: 'run_pipeline',
+      pipeline: pipeline.id,
+      status: refreshedRun?.status ?? PIPELINE_RUN_STATUS.RESUMED,
+      run_id: refreshedRun?.id ?? null,
+    },
+  }
+}
+
 export async function resolveExplicitSchedulerRequest(params: ExplicitSchedulerParams): Promise<ChatResponse | null> {
   const { supabase, orgId, message, confirmationAction, runs } = params
 
@@ -330,11 +420,16 @@ export async function resolveExplicitSchedulerRequest(params: ExplicitSchedulerP
   const isExplicitConfirm = /^confirm\b/i.test(message)
   const isExplicitCancel = /^cancel\b/i.test(message)
   const isRunRequest = Boolean(requestedPipeline) && /\b(run|start|trigger|launch|execute)\b/i.test(message)
+  const isResumeRequest = Boolean(requestedPipeline) && /\b(resume|continue)\b/i.test(message)
   const isStatusRequest = Boolean(requestedPipeline) && /\b(status|results?|running|logs?)\b/i.test(message)
 
   if (isStatusRequest && requestedPipeline) {
     const latestRun = getLatestPipelineRun(runs, requestedPipeline.id)
     return formatPipelineStatusResponse(requestedPipeline, latestRun)
+  }
+
+  if (isResumeRequest && requestedPipeline) {
+    return await resumePipelineRun(supabase, requestedPipeline, orgId, runs)
   }
 
   if (isRunRequest && requestedPipeline && !isExplicitConfirm) {
