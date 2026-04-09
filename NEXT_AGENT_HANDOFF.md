@@ -63,6 +63,7 @@ Current product stance:
 - agent registry slice completed
 - integration registry slice completed, committed, pushed, deployed, and parity-verified
 - Pipeline A rebuilt on the shared engine, committed, pushed, deployed, and parity-verified
+- Pipeline B and Pipeline C invocation baseline restored and pushed in the Milestone 5A checkpoint
 
 ### Architecture Docs
 Committed and pushed:
@@ -72,14 +73,15 @@ Committed and pushed:
 - `SAMM_IMPLEMENTATION_ROADMAP.md`
 
 ## Latest Important Commits
+- `ae5138c fix: accept scheduler org_id for pipeline b and c`
+- `16119f9 docs: add pipeline b and c stability milestones`
+- `63fc7a4 docs: update handoff for pipeline b slice`
 - `1b9f173 refactor: rebuild pipeline a on shared engine`
-- `8a523d5 docs: update roadmap after milestone 4 parity`
-- `e84703a feat: add integration registry parity slice`
 
 These are already pushed to `main`.
 
 ## Current Status
-The current runtime is stable through the Milestone 5 boundary for Pipeline A only.
+The current runtime is stable through the Milestone 5A boundary.
 
 Verified:
 - `/samm` can run Pipeline A successfully
@@ -92,48 +94,47 @@ Verified:
   - `boosts_suggested: 2`
   - `spam_ignored: 0`
   - `errors: []`
-
-Not yet stabilized:
-- Pipeline B invocation from `coordinator-chat`
-- Pipeline C invocation from `coordinator-chat`
-
-Current diagnosed blocker:
-- `coordinator-chat` invokes downstream pipelines with `org_id`
-- Pipeline B and Pipeline C were reading `orgId`
-- this produced `undefined` org ids and immediate 500 failures at function entry for Pipeline B, and likely the same class of failure for Pipeline C
+- Pipeline B invocation from `coordinator-chat` is stable again
+- Pipeline C invocation from `coordinator-chat` is stable again
+- both deployed functions accept the scheduler-style `org_id` payload
+- hosted direct invocation returned `ok: true` for both pipelines after deployment
 
 ## Exact Next Slice
 ### Goal
-Stabilize the current Pipeline B and Pipeline C invocation baselines before continuing into the larger resumable-workflow milestones.
+Add resumable human-gate execution for Pipeline B without widening scope into Pipeline C or broader engine refactors.
 
 ### Required workflow
 1. Discovery:
-   - confirm the current request payload contract between `coordinator-chat` and downstream pipeline functions
-   - confirm Pipeline B and Pipeline C can accept scheduler-triggered payloads without entrypoint failure
+   - read the current `pipeline-b-weekly` implementation end to end
+   - map fetch, planning, drafting, approval, publish, ambassador update, and reporting phases
+   - inspect current Inbox and Content approval actions that touch draft state
+   - inspect the scheduler and shared pipeline status contract for pause/resume hooks
 2. Diagnosis:
-   - separate the narrow invocation-contract bug from the larger Pipeline B resumable-gate and Pipeline C long-window execution milestones
+   - state exactly which parts of Pipeline B are still hardcoded
+   - separate minimum persisted human-gate requirements from optional future abstractions
 3. Plan:
-   - define the smallest stability slice that restores B and C invocation without changing their workflow logic
+   - define the smallest slice that introduces `waiting_human` and `resumed` behavior while preserving current outputs
 4. Edit:
-   - keep the fix limited to request parsing and any directly related entrypoint handling
+   - keep the first resumable-gate slice narrow and reversible
 5. Verify:
-   - `/samm` can trigger Pipeline B without immediate 500 failure
-   - `/samm` can trigger Pipeline C without immediate 500 failure
-   - direct invocation matches the same result
+   - initial Pipeline B run pauses cleanly in `waiting_human`
+   - approval or rejection flows trigger resume through scheduler-backed behavior
+   - completed runs exit cleanly to `success` or `cancelled` without breaking Inbox or Content review UX
+   - reporting still lands in Inbox
 6. Commit stable slice
 7. Push if requested
 
-## Why This Slice Comes First
-- Pipeline A is already engine-backed and parity-verified
-- Pipeline B and Pipeline C should not move into larger architectural work while their basic run path is broken
-- the current issue is a narrow stability defect, so it should be fixed and checkpointed separately from Milestone 6 and Milestone 7
+## Why Pipeline B Is Next
+- the roadmap and architecture docs define Pipeline B as the first real resumable human-gate workflow
+- it already has a natural draft-approval pause point
+- it is a smaller resumability problem than Pipeline C
+- it exercises the next major architectural boundary after Pipeline A engine conversion and Milestone 5A stabilization
 
-## After This Stability Slice
-1. Add resumable human-gate execution for Pipeline B.
-2. Add long-window resumable execution for Pipeline C.
-3. Move to onboarding/capability-template work once the execution core is stable.
-4. Add usage metering and billing enforcement.
-5. Swap mocked adapters for live provider APIs only after the engine and gate boundaries are stable.
+## After This Slice
+1. Add long-window resumable execution for Pipeline C.
+2. Move to onboarding/capability-template work once the execution core is stable.
+3. Add usage metering and billing enforcement.
+4. Swap mocked adapters for live provider APIs only after the engine and gate boundaries are stable.
 
 ## Relevant Files
 ### Frontend
@@ -164,8 +165,10 @@ Stabilize the current Pipeline B and Pipeline C invocation baselines before cont
 - `ANTHROPIC_API_KEY` already exists in hosted Supabase Edge Function secrets.
 - browser parity for Milestone 4 was verified after running Pipeline A from `/samm`
 - engine-backed Pipeline A was deployed and matched the previous hosted parity baseline exactly
+- Milestone 5A is already complete and pushed
+- the current active build slice is Milestone 6 for Pipeline B resumable human gates
+- if a resumed session breaks mid-build, reread the docs first and verify git state before continuing
 - the current local environment did not have `deno` installed, so local `deno check` was not available during parity verification
-- if a resumed session starts from a user report of Pipeline B or C failing from `/samm`, check for request-shape mismatches before assuming the resumable-workflow milestone is at fault
 
 ## Constraints To Preserve
 - Do not do a broad `samm` workspace redesign yet.

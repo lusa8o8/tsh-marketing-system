@@ -18,13 +18,15 @@ Already stable and verified:
 - frontend error normalization for backend function failures
 - browser parity verified for the current Pipeline A flow after the integration-registry refactor
 - Pipeline A rebuilt on the shared engine and parity-verified against the pre-engine baseline
+- Pipeline B invocation restored for scheduler-triggered `org_id` payloads
+- Pipeline C invocation restored for scheduler-triggered `org_id` payloads
 
 This is the current foundation. Future work should preserve this behavior.
 
-Current unstable edges still visible before the next architectural slice:
-- Pipeline B invocation from `coordinator-chat` is not yet re-verified stable after the request-shape mismatch surfaced
-- Pipeline C invocation from `coordinator-chat` is not yet re-verified stable after the same request-shape mismatch surfaced
-- these are stabilization tasks, not replacements for the resumable-gate milestones
+Current active architectural focus:
+- Pipeline B resumable human-gate execution is the next live milestone
+- Pipeline C long-window resumable execution follows after Pipeline B is stable
+- these slices should build on the now-stable invocation baseline for Pipeline B and Pipeline C
 
 ## Roadmap Rules
 Every milestone should follow these rules:
@@ -207,14 +209,14 @@ Commit policy:
 
 ## Milestone 5A: Stabilize Pipeline B And C Invocation Baselines
 Status:
-- pending
+- complete
 
 Goal:
 - restore and verify the current hardcoded Pipeline B and Pipeline C run paths before their larger architectural slices continue
 
 Why this slice exists:
-- Pipeline B and Pipeline C are not yet at the same stability level as Pipeline A
-- the current failure is a narrow invocation-contract issue, not the full resumable-gate implementation
+- Pipeline B and Pipeline C were not yet at the same stability level as Pipeline A
+- the failure was a narrow invocation-contract issue, not the full resumable-gate implementation
 - the next architectural slices should start from a known-good baseline, not from a broken entrypoint
 
 Scope:
@@ -228,10 +230,19 @@ Verification:
 - `coordinator-chat` can trigger Pipeline C without a 500 entrypoint failure
 - Operations no longer shows `Never` only because the function crashes before real execution starts
 
+Completed checkpoint:
+- Pipeline B now accepts the scheduler-style `org_id` payload
+- Pipeline C now accepts the scheduler-style `org_id` payload
+- hosted direct invocation verified both pipelines return `ok: true` after deployment
+- narrow stability checkpoint committed and pushed before Milestone 6 work
+
 Commit policy:
 - one narrow stability commit before Milestone 6 or 7 implementation continues
 
 ## Milestone 6: Add Resumable Human Gates For Pipeline B
+Status:
+- active next slice
+
 Goal:
 - make weekly publishing approval flow resumable and state-driven
 
@@ -373,13 +384,13 @@ Reason:
 
 ## Recommended Immediate Next Slice
 The next concrete implementation slice should be:
-1. verify and stabilize the current Pipeline B and Pipeline C invocation path from `coordinator-chat`
-2. commit the narrow entrypoint stability fix once `/samm` and direct invocation no longer fail immediately
-3. start Pipeline B discovery from the stabilized baseline
-4. define the smallest `waiting_human` / resume slice for Pipeline B
-5. implement and verify the resumable human gate before widening scope into Pipeline C
+1. complete Pipeline B discovery from the stabilized baseline
+2. define the smallest persisted `waiting_human` / `resumed` contract for Pipeline B
+3. wire Content and Inbox approval actions to scheduler-backed resume behavior
+4. verify the run pauses, resumes, and exits cleanly without regressing current content-review UX
+5. commit the resumable human-gate slice only after hosted verification
 
-This is now the highest-leverage move because Pipeline A is already engine-backed and parity-verified, while Pipeline B and Pipeline C still need a clean stable baseline before their resumable-workflow milestones proceed.
+This is now the highest-leverage move because Pipeline A is already engine-backed and parity-verified, and Pipeline B is the first real workflow that exercises persisted human-gate resumability.
 
 ## Commit Strategy
 Recommended commit pattern:
