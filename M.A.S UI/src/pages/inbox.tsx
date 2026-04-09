@@ -21,6 +21,7 @@ const BADGE_COLORS: Record<string, string> = {
 };
 
 const BADGE_LABELS: Record<string, string> = {
+  draft_approval: "Draft Approval",
   campaign_brief: "Campaign Brief",
   escalation: "Escalation",
   weekly_report: "Weekly Report",
@@ -102,9 +103,7 @@ export default function Inbox() {
               <p>You&apos;re all caught up.</p>
             </div>
           ) : (
-            items
-              ?.filter((item) => item.item_type !== "draft_approval")
-              .map((item) => <InboxItemCard key={item.id} item={item} />)
+            items?.map((item) => <InboxItemCard key={item.id} item={item} />)
           )}
         </div>
       </div>
@@ -121,8 +120,11 @@ function InboxItemCard({ item }: { item: any }) {
   const actionMutation = useActionInboxItem({
     mutation: {
       onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: getListInboxItemsQueryKey() });
+        queryClient.invalidateQueries({ queryKey: ["inbox-items"] });
         queryClient.invalidateQueries({ queryKey: getGetInboxSummaryQueryKey() });
+        queryClient.invalidateQueries({ queryKey: ["content-registry"] });
+        queryClient.invalidateQueries({ queryKey: ["pipeline-status"] });
+        queryClient.invalidateQueries({ queryKey: ["pipeline-runs"] });
         setShowRejectInput(false);
       },
     },
@@ -190,7 +192,7 @@ function InboxItemCard({ item }: { item: any }) {
           {item.payload.pipeline && (
             <>
               <span>{item.payload.pipeline}</span>
-              <span>·</span>
+              <span>ï¿½</span>
             </>
           )}
           <span>{formatDistanceToNow(new Date(item.created_at))} ago</span>

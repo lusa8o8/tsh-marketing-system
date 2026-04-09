@@ -416,3 +416,13 @@ entrypoint = "./functions/coordinator-chat/index.ts"
 enabled = true
 verify_jwt = false
 entrypoint = "./functions/pipeline-a-engagement/index.ts"
+
+[functions.pipeline-b-weekly]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/pipeline-b-weekly/index.ts"
+
+[functions.pipeline-c-campaign]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/pipeline-c-campaign/index.ts"

@@ -480,14 +480,6 @@ export function useActionInboxItem(options?: MutationHookOptions) {
             status: contentStatus,
           };
 
-          if (data.action === "approve") {
-            contentPatch.approved_at = new Date().toISOString();
-          }
-
-          if (data.action === "reject") {
-            contentPatch.error_message = data.note ?? "Rejected in inbox";
-          }
-
           const { error: contentError } = await supabase
             .from("content_registry")
             .update(contentPatch)
@@ -543,7 +535,6 @@ export function useRetryContent(options?: MutationHookOptions) {
         .from("content_registry")
         .update({
           status: "pending_approval",
-          error_message: null,
         })
         .eq("id", id)
         .eq("org_id", ORG_ID);
@@ -569,8 +560,8 @@ export function useActionContent(options?: MutationHookOptions) {
 
       const patch =
         data.action === "approve"
-          ? { status: "scheduled", approved_at: new Date().toISOString(), error_message: null }
-          : { status: "rejected", error_message: "Rejected by operator" };
+          ? { status: "scheduled" }
+          : { status: "rejected" };
 
       const { error } = await supabase.from("content_registry").update(patch).eq("id", id).eq("org_id", ORG_ID);
       if (error) throw error;

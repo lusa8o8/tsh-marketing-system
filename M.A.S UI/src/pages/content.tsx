@@ -201,7 +201,7 @@ function ContentCard({
 
           <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
             <Images className="h-3.5 w-3.5" />
-            <span>No attachments — graphics and carousels will appear here</span>
+            <span>No attachments ï¿½ graphics and carousels will appear here</span>
           </div>
         </div>
       )}
@@ -273,14 +273,24 @@ export default function Content() {
 
   const retryMutation = useRetryContent({
     mutation: {
-      onSuccess: () => queryClient.invalidateQueries({ queryKey: getListContentQueryKey() })
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: ["content-registry"] });
+        queryClient.invalidateQueries({ queryKey: ["inbox-items"] });
+        queryClient.invalidateQueries({ queryKey: ["inbox-summary"] });
+        queryClient.invalidateQueries({ queryKey: ["pipeline-status"] });
+        queryClient.invalidateQueries({ queryKey: ["pipeline-runs"] });
+      }
     }
   });
 
   const actionMutation = useActionContent({
     mutation: {
       onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: getListContentQueryKey() });
+        queryClient.invalidateQueries({ queryKey: ["content-registry"] });
+        queryClient.invalidateQueries({ queryKey: ["inbox-items"] });
+        queryClient.invalidateQueries({ queryKey: ["inbox-summary"] });
+        queryClient.invalidateQueries({ queryKey: ["pipeline-status"] });
+        queryClient.invalidateQueries({ queryKey: ["pipeline-runs"] });
         setExpandedId(null);
       }
     }

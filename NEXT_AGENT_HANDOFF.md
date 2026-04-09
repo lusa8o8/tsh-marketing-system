@@ -120,6 +120,8 @@ Add resumable human-gate execution for Pipeline B without widening scope into Pi
    - initial Pipeline B run pauses cleanly in `waiting_human`
    - direct hosted resume returns `waiting_human` again while drafts are still pending
    - approval or rejection flows trigger resume through scheduler-backed behavior
+   - Pipeline B draft approvals are visible and actionable from Inbox, not just Content
+   - coordinator-backed resume no longer fails on downstream edge auth
    - completed runs exit cleanly to `success` or `cancelled` without breaking Inbox or Content review UX
    - reporting still lands in Inbox
 6. Commit stable slice
@@ -167,11 +169,13 @@ Add resumable human-gate execution for Pipeline B without widening scope into Pi
 - browser parity for Milestone 4 was verified after running Pipeline A from `/samm`
 - engine-backed Pipeline A was deployed and matched the previous hosted parity baseline exactly
 - Milestone 5A is already complete and pushed
-- Milestone 6 now has a hosted initial-run pause and direct resume baseline working for Pipeline B
-- the current active build slice is Milestone 6 for Pipeline B resumable human gates
+- Milestone 6 is now verified through the real browser app flow for Pipeline B pause/resume
+- the next major roadmap slice is Milestone 7 for Pipeline C long-window execution
 - if a resumed session breaks mid-build, reread the docs first and verify git state before continuing
-- latest hosted Milestone 6 verification: direct `pipeline-b-weekly` invoke returns `waiting_human: true`, and direct `resume_run_id` invoke returns `waiting_human: true` with pending drafts; browser-authenticated `coordinator-chat` resume is still the remaining verification gap because anon invocation fails with `missing sub claim`
-- the schema slice for Milestone 6 now exists in `supabase/migrations/20260409161000_pipeline_runs_status_states.sql` and was applied with `supabase db push`
+- latest hosted Milestone 6 verification: real Inbox approval now reaches `coordinator-chat`, `coordinator-chat` reaches `pipeline-b-weekly`, and Pipeline B resume no longer fails with `401` after the function auth config fix
+- Milestone 6 follow-up fixes included removing unsupported `content_registry` column writes from the UI approval path and exposing `draft_approval` rows in Inbox
+- the schema slice for Milestone 6 exists in `supabase/migrations/20260409161000_pipeline_runs_status_states.sql` and was applied with `supabase db push`
+- unresolved follow-up note: user observed a possible later `samm` behavior bug after the stable resume path was fixed; treat that as a separate investigation, not as part of the completed Milestone 6 gate/resume slice
 - the current local environment did not have `deno` installed, so local `deno check` was not available during parity verification
 
 ## Constraints To Preserve

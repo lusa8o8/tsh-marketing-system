@@ -241,7 +241,9 @@ Commit policy:
 
 ## Milestone 6: Add Resumable Human Gates For Pipeline B
 Status:
-- active next slice
+- completed and verified through the real app flow
+- coordinator-backed resume now works from Inbox approvals
+- follow-up bug investigation may still be needed for later `samm` behavior, but the Milestone 6 gate/resume slice itself is stable
 
 Goal:
 - make weekly publishing approval flow resumable and state-driven
@@ -249,6 +251,7 @@ Goal:
 Scope:
 - define `human_gate` step handling
 - connect Content review actions to scheduler resume behavior
+- surface draft approvals in Inbox instead of hiding them from the primary review surface
 - persist draft lifecycle clearly
 - keep publisher agent behind approved-content reads only
 
@@ -256,6 +259,8 @@ Verification:
 - drafts pause the run
 - approval resumes the run
 - rejection exits or loops according to policy
+- Inbox and Content both expose actionable draft approvals for the waiting run
+- coordinator-to-pipeline resume invocations no longer fail on edge auth
 - reporting still lands in Inbox
 
 Commit policy:
