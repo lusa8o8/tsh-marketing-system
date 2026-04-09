@@ -9,9 +9,14 @@ The goal is to move from the current stabilized runtime toward the full modular 
 Already stable and verified:
 - `coordinator-chat` scheduler-first handling for Pipeline A status and run requests
 - stale `pipeline_runs` expiry
+- extracted scheduler module in `coordinator-chat/scheduler.ts`
+- normalized pipeline run lifecycle constants shared across runtime code
+- agent registry introduced for the current bounded agents used by Pipeline A/B/C
+- integration registry introduced for the current mocked channel metadata
 - deterministic Pipeline A completion and failure reporting
 - Operations overview visibility for pipeline runs
 - frontend error normalization for backend function failures
+- browser parity verified for the current Pipeline A flow after the integration-registry refactor
 
 This is the current foundation. Future work should preserve this behavior.
 
@@ -40,6 +45,9 @@ Checkpoint commits:
 - existing completed
 
 ## Milestone 1: Extract Scheduler From coordinator-chat
+Status:
+- complete
+
 Goal:
 - move scheduler behavior into a dedicated internal module without changing user-facing behavior
 
@@ -69,6 +77,9 @@ Commit policy:
 - one stable commit after behavior parity is verified
 
 ## Milestone 2: Normalize Pipeline State Machine
+Status:
+- complete
+
 Goal:
 - establish the shared run lifecycle for all pipelines
 
@@ -91,6 +102,9 @@ Commit policy:
 - one stable commit after state transitions are verified end-to-end
 
 ## Milestone 3: Introduce Agent Registry
+Status:
+- complete
+
 Goal:
 - stop hard-coding agent behavior inside pipeline functions
 
@@ -117,6 +131,9 @@ Commit policy:
 - separate commit for registry introduction before broad pipeline rewrites
 
 ## Milestone 4: Introduce Integration Registry
+Status:
+- complete
+
 Goal:
 - isolate platform-specific logic behind adapter capabilities
 
@@ -140,6 +157,11 @@ Future adapters:
 Verification:
 - Pipeline A and B still work using mocked adapters
 - unsupported capabilities fail predictably
+
+Completed checkpoint:
+- registry-backed channel metadata wired into the current pipeline slices
+- deployed parity confirmed for Pipeline A
+- browser verification confirmed `/samm` run flow and Operations overview remained unchanged
 
 Commit policy:
 - one stable commit after adapter parity is confirmed
@@ -310,12 +332,13 @@ Reason:
 
 ## Recommended Immediate Next Slice
 The next concrete implementation slice should be:
-1. extract the scheduler from `coordinator-chat`
-2. preserve exact current behavior
-3. verify Pipeline A status and run flow remain stable
-4. commit the refactor as a behavior-parity checkpoint
+1. do discovery on the current Pipeline A function and map it into the target engine shape
+2. define the minimum declarative step contract needed for Pipeline A only
+3. rebuild Pipeline A on the engine while preserving exact current behavior
+4. verify parity for comments, escalations, replies, poll creation, metrics snapshot, and run completion
+5. commit the engine-backed Pipeline A slice only after production-like verification
 
-This is the highest-leverage move because it hardens the runtime boundary before wider modularization.
+This is now the highest-leverage move because Milestones 1-4 are complete and Pipeline A is the first bounded workflow that exercises the engine shape without the resumable-human-gate complexity of Pipeline B or C.
 
 ## Commit Strategy
 Recommended commit pattern:
