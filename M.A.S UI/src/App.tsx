@@ -7,7 +7,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { Layout } from "@/components/layout";
 import NotFound from "@/pages/not-found";
 import Login from "@/pages/login";
-import { getSession, supabase } from "@/lib/supabase";
+import { getActiveSession, supabase } from "@/lib/supabase";
 
 import Inbox from "@/pages/inbox";
 import Content from "@/pages/content";
@@ -63,15 +63,17 @@ function AuthGate() {
   useEffect(() => {
     let isMounted = true;
 
-    getSession().then(({ data, error }) => {
-      if (!isMounted) return;
-      if (error) {
+    getActiveSession()
+      .then((nextSession) => {
+        if (!isMounted) return;
+        setSession(nextSession ?? null);
+        setIsLoading(false);
+      })
+      .catch(() => {
+        if (!isMounted) return;
         setSession(null);
-      } else {
-        setSession(data.session ?? null);
-      }
-      setIsLoading(false);
-    });
+        setIsLoading(false);
+      });
 
     const {
       data: { subscription },

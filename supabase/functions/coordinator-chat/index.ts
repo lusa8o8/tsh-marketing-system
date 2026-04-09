@@ -21,7 +21,8 @@ type ChatResponse = {
   invoked_action?: {
     type: 'run_pipeline'
     pipeline: string
-    status: 'queued' | 'completed' | 'failed'
+    status: 'queued' | 'running' | 'completed' | 'failed'
+    run_id?: string | null
   } | null
 }
 
@@ -155,6 +156,50 @@ function summarizeInbox(rows: any[]) {
   }))
 }
 
+
+const STALE_RUN_MINUTES = 10
+
+function isStaleRunningRun(row: any) {
+  if (row?.status !== 'running') return false
+
+  const startedAt = row?.started_at ?? row?.created_at
+  if (!startedAt) return false
+
+  const elapsedMs = Date.now() - new Date(startedAt).getTime()
+  return Number.isFinite(elapsedMs) && elapsedMs > STALE_RUN_MINUTES * 60 * 1000
+}
+
+async function expireStaleRuns(supabase: any, rows: any[]) {
+  const staleRunIds = (rows ?? [])
+    .filter((row) => isStaleRunningRun(row))
+    .map((row) => row.id)
+    .filter(Boolean)
+
+  if (staleRunIds.length === 0) {
+    return rows ?? []
+  }
+
+  await supabase
+    .from('pipeline_runs')
+    .update({
+      status: 'failed',
+      finished_at: new Date().toISOString(),
+      result: { error: 'Marked stale after exceeding runtime window' },
+    })
+    .in('id', staleRunIds)
+
+  return (rows ?? []).map((row) =>
+    staleRunIds.includes(row.id)
+      ? {
+          ...row,
+          status: 'failed',
+          finished_at: new Date().toISOString(),
+          result: { error: 'Marked stale after exceeding runtime window' },
+        }
+      : row
+  )
+}
+
 async function invokePipeline(supabase: any, pipelineId: string, orgId: string) {
   const functionName = PIPELINE_TARGETS[pipelineId]
   if (!functionName) {
@@ -171,6 +216,143 @@ async function invokePipeline(supabase: any, pipelineId: string, orgId: string) 
 
   return data
 }
+
+function getLatestPipelineRun(rows: any[], pipelineId: string) {
+  return (rows ?? []).find((row) => row.pipeline === pipelineId) ?? null
+}
+
+function formatElapsed(startedAt?: string | null) {
+  if (!startedAt) return 'unknown duration'
+
+  const elapsedMs = Date.now() - new Date(startedAt).getTime()
+  if (!Number.isFinite(elapsedMs) || elapsedMs < 0) return 'unknown duration'
+
+  const totalMinutes = Math.floor(elapsedMs / (1000 * 60))
+  if (totalMinutes < 1) return 'less than a minute'
+  if (totalMinutes < 60) return `${totalMinutes} minute${totalMinutes === 1 ? '' : 's'}`
+
+  const hours = Math.floor(totalMinutes / 60)
+  const minutes = totalMinutes % 60
+  if (minutes === 0) return `${hours} hour${hours === 1 ? '' : 's'}`
+  return `${hours} hour${hours === 1 ? '' : 's'} ${minutes} minute${minutes === 1 ? '' : 's'}`
+}
+
+async function fetchLatestPipelineRun(supabase: any, orgId: string, pipelineId: string) {
+  const { data, error } = await supabase
+    .from('pipeline_runs')
+    .select('*')
+    .eq('org_id', orgId)
+    .eq('pipeline', pipelineId)
+    .order('started_at', { ascending: false })
+    .limit(1)
+
+  if (error) {
+    throw new Error(`Failed to load ${pipelineId} status: ${error.message}`)
+  }
+
+  return data?.[0] ?? null
+}
+
+function formatPipelineStatusResponse(pipeline: ReturnType<typeof inferPipelineTarget>, run: any) {
+  if (!run) {
+    return {
+      message: `${pipeline?.title ?? 'That pipeline'} has no recorded runs yet. I can start it when you're ready.`,
+      suggestions: ['Run the engagement pipeline', 'What needs my approval?', 'Summarize this week'],
+    }
+  }
+
+  const startedAt = run.started_at ?? run.created_at ?? null
+  const startedLabel = startedAt
+    ? new Date(startedAt).toLocaleString('en-ZA', {
+        day: 'numeric',
+        month: 'short',
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: false,
+        timeZone: 'Africa/Johannesburg',
+      })
+    : 'unknown time'
+
+  if (run.status === 'running') {
+    return {
+      message: `${pipeline?.title ?? 'That pipeline'} is currently running (started ${startedLabel}, ${formatElapsed(startedAt)} ago).`,
+      suggestions: ['Check pipeline results', 'What needs my approval?', 'Summarize this week'],
+    }
+  }
+
+  if (run.status === 'failed') {
+    const reason = run.result?.error ?? run.result_summary ?? 'No failure summary recorded.'
+    return {
+      message: `${pipeline?.title ?? 'That pipeline'} last failed at ${startedLabel}. ${reason}`,
+      suggestions: ['Run the engagement pipeline', 'Check pipeline results', 'What needs my approval?'],
+    }
+  }
+
+  const summary = run.result_summary ?? run.result?.error ?? 'No summary recorded yet.'
+  return {
+    message: `${pipeline?.title ?? 'That pipeline'} last completed successfully at ${startedLabel}. ${summary}`,
+    suggestions: ['Check pipeline results', 'What needs my approval?', 'Summarize this week'],
+  }
+}
+
+async function schedulePipelineRun(supabase: any, pipeline: ReturnType<typeof inferPipelineTarget>, orgId: string, runs: any[]) {
+  const latestRun = getLatestPipelineRun(runs, pipeline.id)
+
+  if (latestRun?.status === 'running') {
+    const startedAt = latestRun.started_at ?? latestRun.created_at ?? null
+    return {
+      message: `${pipeline.title} is already running (started ${formatElapsed(startedAt)} ago).`,
+      suggestions: ['Check pipeline results', 'What needs my approval?', 'Summarize this week'],
+      invoked_action: {
+        type: 'run_pipeline' as const,
+        pipeline: pipeline.id,
+        status: 'running' as const,
+        run_id: latestRun.id ?? null,
+      },
+    }
+  }
+
+  await invokePipeline(supabase, pipeline.id, orgId)
+  const refreshedRun = await fetchLatestPipelineRun(supabase, orgId, pipeline.id)
+
+  if (refreshedRun?.status === 'failed') {
+    return {
+      message: `${pipeline.title} failed immediately. ${refreshedRun.result?.error ?? 'No failure summary recorded.'}`,
+      suggestions: ['Check pipeline results', 'What needs my approval?', 'Summarize this week'],
+      invoked_action: {
+        type: 'run_pipeline' as const,
+        pipeline: pipeline.id,
+        status: 'failed' as const,
+        run_id: refreshedRun.id ?? null,
+      },
+    }
+  }
+
+  if (refreshedRun?.status === 'success') {
+    return {
+      message: `${pipeline.title} completed successfully. ${refreshedRun.result_summary ?? refreshedRun.result?.error ?? 'The latest run is now reflected in workspace state.'}`,
+      suggestions: ['Check pipeline results', 'What needs my approval?', 'Summarize this week'],
+      invoked_action: {
+        type: 'run_pipeline' as const,
+        pipeline: pipeline.id,
+        status: 'completed' as const,
+        run_id: refreshedRun.id ?? null,
+      },
+    }
+  }
+
+  return {
+    message: `${pipeline.title} has been started and is now running.`,
+    suggestions: ['Check pipeline results', 'What needs my approval?', 'Summarize this week'],
+    invoked_action: {
+      type: 'run_pipeline' as const,
+      pipeline: pipeline.id,
+      status: 'running' as const,
+      run_id: refreshedRun?.id ?? null,
+    },
+  }
+}
+
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -224,7 +406,7 @@ Deno.serve(async (req) => {
     const [orgConfigResult, metricsResult, runsResult, eventsResult, inboxCountResult, inboxResult] = await Promise.all([
       supabase.from('org_config').select('*').eq('org_id', orgId).single(),
       supabase.from('platform_metrics').select('*').eq('org_id', orgId).order('snapshot_date', { ascending: false }).limit(8),
-      supabase.from('pipeline_runs').select('*').eq('org_id', orgId).order('started_at', { ascending: false }).order('created_at', { ascending: false }).limit(8),
+      supabase.from('pipeline_runs').select('*').eq('org_id', orgId).order('started_at', { ascending: false }).limit(8),
       supabase.from('academic_calendar').select('*').eq('org_id', orgId).gte('event_date', today).order('event_date', { ascending: true }).limit(5),
       supabase.from('human_inbox').select('*', { count: 'exact', head: true }).eq('org_id', orgId).eq('status', 'pending'),
       supabase.from('human_inbox').select('*').eq('org_id', orgId).eq('status', 'pending').order('created_at', { ascending: false }).limit(5),
@@ -237,16 +419,31 @@ Deno.serve(async (req) => {
     if (inboxCountResult.error) throw new Error(`Failed to load inbox summary: ${inboxCountResult.error.message}`)
     if (inboxResult.error) throw new Error(`Failed to load inbox items: ${inboxResult.error.message}`)
 
+    const activeRuns = await expireStaleRuns(supabase, runsResult.data ?? [])
+
     const orgConfig = orgConfigResult.data
     const metrics = summarizeMetrics(metricsResult.data ?? [])
-    const recentRuns = summarizeRuns(runsResult.data ?? [])
+    const recentRuns = summarizeRuns(activeRuns)
     const upcomingEvents = summarizeEvents(eventsResult.data ?? [])
     const pendingInbox = summarizeInbox(inboxResult.data ?? [])
     const pendingCount = inboxCountResult.count ?? 0
 
     const directPipeline = confirmationAction ? inferPipelineTarget(confirmationAction) : null
+    const requestedPipeline = inferPipelineTarget(message)
     const isExplicitConfirm = /^confirm\b/i.test(message)
     const isExplicitCancel = /^cancel\b/i.test(message)
+    const isRunRequest = Boolean(requestedPipeline) && /\b(run|start|trigger|launch|execute)\b/i.test(message)
+    const isStatusRequest = Boolean(requestedPipeline) && /\b(status|results?|running|logs?)\b/i.test(message)
+
+    if (isStatusRequest && requestedPipeline) {
+      const latestRun = getLatestPipelineRun(activeRuns, requestedPipeline.id)
+      return jsonResponse(formatPipelineStatusResponse(requestedPipeline, latestRun))
+    }
+
+    if (isRunRequest && requestedPipeline && !isExplicitConfirm) {
+      const scheduled = await schedulePipelineRun(supabase, requestedPipeline, orgId, activeRuns)
+      return jsonResponse(scheduled)
+    }
 
     if (isExplicitCancel) {
       return jsonResponse({
@@ -256,16 +453,8 @@ Deno.serve(async (req) => {
     }
 
     if (isExplicitConfirm && directPipeline) {
-      const result = await invokePipeline(supabase, directPipeline.id, orgId)
-      return jsonResponse({
-        message: `${directPipeline.title} has been started. I will use the latest workspace state and write the results back into runs, inbox, and content where relevant.`,
-        suggestions: ['Show recent runs', 'What changed after that run?', 'What needs my approval?'],
-        invoked_action: {
-          type: 'run_pipeline',
-          pipeline: directPipeline.id,
-          status: 'queued',
-        },
-      })
+      const scheduled = await schedulePipelineRun(supabase, directPipeline, orgId, activeRuns)
+      return jsonResponse(scheduled)
     }
 
     const prompt = {
@@ -274,7 +463,7 @@ Deno.serve(async (req) => {
         full_name: orgConfig?.full_name ?? '',
         timezone: orgConfig?.timezone ?? '',
         pending_inbox_count: pendingCount,
-        pending_inbox,
+        pending_inbox: pendingInbox,
         recent_runs: recentRuns,
         upcoming_events: upcomingEvents,
         latest_metrics: metrics,
@@ -284,7 +473,7 @@ Deno.serve(async (req) => {
     }
 
     const completion = await anthropic.messages.create({
-      model: 'claude-3-5-sonnet-20241022',
+      model: 'claude-sonnet-4-20250514',
       max_tokens: 600,
       system: 'You are samm. Be concise, operational, and clear. Return JSON only.',
       messages: [
@@ -309,15 +498,15 @@ Deno.serve(async (req) => {
     const action = parsed.action && typeof parsed.action === 'object' ? parsed.action : null
 
     if (action?.type === 'run_pipeline' && action.pipeline && action.needs_confirmation === false) {
-      await invokePipeline(supabase, action.pipeline, orgId)
+      const scheduled = await schedulePipelineRun(supabase, {
+        id: action.pipeline,
+        title: action.title,
+        description: action.description,
+      }, orgId, activeRuns)
       return jsonResponse({
-        message: parsed.message || `${action.title} has been started.`,
+        message: parsed.message || scheduled.message,
         suggestions,
-        invoked_action: {
-          type: 'run_pipeline',
-          pipeline: action.pipeline,
-          status: 'queued',
-        },
+        invoked_action: scheduled.invoked_action,
       })
     }
 

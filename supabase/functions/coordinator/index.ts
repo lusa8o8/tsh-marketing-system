@@ -50,7 +50,7 @@ Deno.serve(async (req) => {
 
   // read ORG_ID from request body, falling back to env var
   const body = await req.json().catch(() => ({}))
-  const ORG_ID: string = body.orgId ?? Deno.env.get('SUPABASE_ORG_ID') ?? 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'
+  const ORG_ID: string = body.orgId ?? body.org_id ?? Deno.env.get('SUPABASE_ORG_ID') ?? 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'
 
   const config = await getOrgConfig(supabase, ORG_ID)
 

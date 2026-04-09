@@ -1,5 +1,6 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { ORG_ID, supabase } from "@/lib/supabase";
+import { FunctionsHttpError } from "@supabase/supabase-js";
+import { getAccessToken, ORG_ID, supabase } from "@/lib/supabase";
 
 type QueryHookOptions = { query?: Record<string, any> };
 type MutationHookOptions = { mutation?: Record<string, any> };
@@ -323,6 +324,31 @@ async function requireSingleRow(table: string, id: string) {
   return data;
 }
 
+async function readFunctionError(error: unknown) {
+  if (error instanceof FunctionsHttpError) {
+    try {
+      const context = error.context;
+      const cloned = typeof context?.clone === "function" ? context.clone() : context;
+      const payload = await cloned.json();
+      if (typeof payload?.error === "string" && payload.error) return payload.error;
+      if (typeof payload?.message === "string" && payload.message) return payload.message;
+      return JSON.stringify(payload);
+    } catch (_jsonError) {
+      try {
+        const context = error.context;
+        const cloned = typeof context?.clone === "function" ? context.clone() : context;
+        const text = await cloned.text();
+        if (text) return text;
+      } catch (_textError) {
+        // Fall through to generic handling below.
+      }
+    }
+  }
+
+  if (error instanceof Error) return error.message;
+  return "The request failed.";
+}
+
 export function getGetInboxSummaryQueryKey() {
   return ["inbox-summary", ORG_ID] as const;
 }
@@ -532,7 +558,6 @@ export function useGetPipelinesStatus(options?: QueryHookOptions) {
         .select("*")
         .eq("org_id", ORG_ID)
         .order("started_at", { ascending: false })
-        .order("created_at", { ascending: false })
         .limit(40);
 
       if (error) throw error;
@@ -575,8 +600,7 @@ export function useListPipelineRuns(params: PipelineRunsFilter = {}, options?: Q
         .from("pipeline_runs")
         .select("*")
         .eq("org_id", ORG_ID)
-        .order("started_at", { ascending: false })
-        .order("created_at", { ascending: false });
+        .order("started_at", { ascending: false });
 
       if (params.limit) query = query.limit(params.limit);
 
@@ -884,21 +908,40 @@ type CoordinatorChatResponse = {
 export function useCoordinatorChat(options?: MutationHookOptions) {
   return useMutation({
     mutationFn: async ({ message, history = [], confirmationAction = null }: CoordinatorChatRequest) => {
-      const { data, error } = await supabase.functions.invoke("coordinator-chat", {
-        body: {
-          message,
-          history,
-          confirmationAction,
-          orgId: ORG_ID,
-        },
-      });
+      try {
+        const accessToken = await getAccessToken();
 
-      if (error) {
-        throw error;
+        if (!accessToken) {
+          throw new Error("Your session expired. Please sign in again.");
+        }
+
+        const { data, error } = await supabase.functions.invoke("coordinator-chat", {
+          body: {
+            message,
+            history,
+            confirmationAction,
+            orgId: ORG_ID,
+          },
+          headers: accessToken
+            ? {
+                Authorization: `Bearer ${accessToken}`,
+              }
+            : undefined,
+        });
+
+        if (error) {
+          throw error;
+        }
+
+        return (data ?? {}) as CoordinatorChatResponse;
+      } catch (error) {
+        const message = await readFunctionError(error);
+        throw new Error(message);
       }
-
-      return (data ?? {}) as CoordinatorChatResponse;
     },
     ...options?.mutation,
   });
 }
+
+
+
