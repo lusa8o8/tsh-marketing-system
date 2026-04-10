@@ -4,6 +4,7 @@ import {
   useListContent,
   useRetryContent,
   useActionContent,
+  useBatchApproveContent,
   getListContentQueryKey,
 } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
@@ -262,51 +263,86 @@ const TABS: { id: TabStatus; label: string }[] = [
   { id: "failed", label: "Failed" },
 ];
 
+type ContentItem = {
+  id: string;
+  platform: string;
+  platforms?: string[] | null;
+  body: string;
+  subject_line?: string | null;
+  status: string;
+  scheduled_at?: string | null;
+  published_at?: string | null;
+  error_message?: string | null;
+  campaign_name?: string | null;
+  pipeline_run_id?: string | null;
+};
+
+function groupDraftsByCampaign(items: ContentItem[]) {
+  const groups: { pipeline_run_id: string; campaign_name: string; items: ContentItem[] }[] = [];
+  const ungrouped: ContentItem[] = [];
+
+  for (const item of items) {
+    if (item.pipeline_run_id && item.campaign_name) {
+      const existing = groups.find((g) => g.pipeline_run_id === item.pipeline_run_id);
+      if (existing) {
+        existing.items.push(item);
+      } else {
+        groups.push({ pipeline_run_id: item.pipeline_run_id, campaign_name: item.campaign_name, items: [item] });
+      }
+    } else {
+      ungrouped.push(item);
+    }
+  }
+
+  return { groups, ungrouped };
+}
+
 export default function Content() {
   const [status, setStatus] = useState<TabStatus>("draft");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: ["content-registry"] });
+    queryClient.invalidateQueries({ queryKey: ["inbox-items"] });
+    queryClient.invalidateQueries({ queryKey: ["inbox-summary"] });
+    queryClient.invalidateQueries({ queryKey: ["pipeline-status"] });
+    queryClient.invalidateQueries({ queryKey: ["pipeline-runs"] });
+  };
+
   const { data: items, isLoading } = useListContent({ status }, {
     query: { queryKey: getListContentQueryKey({ status }) }
   });
 
-  const retryMutation = useRetryContent({
-    mutation: {
-      onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: ["content-registry"] });
-        queryClient.invalidateQueries({ queryKey: ["inbox-items"] });
-        queryClient.invalidateQueries({ queryKey: ["inbox-summary"] });
-        queryClient.invalidateQueries({ queryKey: ["pipeline-status"] });
-        queryClient.invalidateQueries({ queryKey: ["pipeline-runs"] });
-      }
-    }
-  });
-
+  const retryMutation = useRetryContent({ mutation: { onSuccess: invalidate } });
   const actionMutation = useActionContent({
     mutation: {
-      onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: ["content-registry"] });
-        queryClient.invalidateQueries({ queryKey: ["inbox-items"] });
-        queryClient.invalidateQueries({ queryKey: ["inbox-summary"] });
-        queryClient.invalidateQueries({ queryKey: ["pipeline-status"] });
-        queryClient.invalidateQueries({ queryKey: ["pipeline-runs"] });
-        setExpandedId(null);
-      }
+      onSuccess: () => { invalidate(); setExpandedId(null); }
     }
   });
+  const batchApproveMutation = useBatchApproveContent({ mutation: { onSuccess: invalidate } });
 
-  const handleToggle = (id: string) => {
-    setExpandedId((prev) => (prev === id ? null : id));
-  };
+  const handleToggle = (id: string) => setExpandedId((prev) => (prev === id ? null : id));
+  const handleApprove = (id: string) => actionMutation.mutate({ id, data: { action: "approve" } });
+  const handleReject = (id: string) => actionMutation.mutate({ id, data: { action: "reject" } });
 
-  const handleApprove = (id: string) => {
-    actionMutation.mutate({ id, data: { action: "approve" } });
-  };
+  const renderCard = (item: ContentItem) => (
+    <ContentCard
+      key={item.id}
+      item={item}
+      isExpanded={expandedId === item.id}
+      onToggle={() => handleToggle(item.id)}
+      onRetry={(id) => retryMutation.mutate({ id })}
+      onApprove={handleApprove}
+      onReject={handleReject}
+      retryPending={retryMutation.isPending}
+      actionPending={actionMutation.isPending}
+    />
+  );
 
-  const handleReject = (id: string) => {
-    actionMutation.mutate({ id, data: { action: "reject" } });
-  };
+  const { groups, ungrouped } = status === "draft" && items
+    ? groupDraftsByCampaign(items as ContentItem[])
+    : { groups: [], ungrouped: items as ContentItem[] ?? [] };
 
   return (
     <div className="flex h-full flex-col bg-[linear-gradient(180deg,rgba(244,241,235,0.45)_0%,rgba(244,241,235,0)_30%)]">
@@ -340,37 +376,61 @@ export default function Content() {
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 py-5 md:px-6 md:py-6">
-        <div className="mx-auto grid max-w-4xl grid-cols-1 gap-4 md:grid-cols-2">
+        <div className="mx-auto max-w-4xl space-y-8">
           {isLoading ? (
-            Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="space-y-4 rounded-xl border border-border bg-card p-5">
-                <div className="flex justify-between">
-                  <Skeleton className="h-5 w-24" />
-                  <Skeleton className="h-5 w-16 rounded-full" />
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="space-y-4 rounded-xl border border-border bg-card p-5">
+                  <div className="flex justify-between">
+                    <Skeleton className="h-5 w-24" />
+                    <Skeleton className="h-5 w-16 rounded-full" />
+                  </div>
+                  <Skeleton className="h-10 w-full" />
+                  <Skeleton className="h-4 w-32" />
                 </div>
-                <Skeleton className="h-10 w-full" />
-                <Skeleton className="h-4 w-32" />
-              </div>
-            ))
-          ) : items?.length === 0 ? (
-            <div className="col-span-full py-20 text-center text-muted-foreground">
+              ))}
+            </div>
+          ) : (groups.length === 0 && ungrouped.length === 0) ? (
+            <div className="py-20 text-center text-muted-foreground">
               <LayoutList className="mx-auto mb-4 h-12 w-12 opacity-20" />
               <p>No {status} content found.</p>
             </div>
           ) : (
-            items?.map((item) => (
-              <ContentCard
-                key={item.id}
-                item={item}
-                isExpanded={expandedId === item.id}
-                onToggle={() => handleToggle(item.id)}
-                onRetry={(id) => retryMutation.mutate({ id })}
-                onApprove={handleApprove}
-                onReject={handleReject}
-                retryPending={retryMutation.isPending}
-                actionPending={actionMutation.isPending}
-              />
-            ))
+            <>
+              {groups.map((group) => (
+                <div key={group.pipeline_run_id}>
+                  <div className="mb-3 flex items-center justify-between">
+                    <div>
+                      <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Campaign</p>
+                      <h2 className="text-sm font-semibold text-foreground">{group.campaign_name}</h2>
+                    </div>
+                    <Button
+                      size="sm"
+                      className="h-8 text-xs"
+                      disabled={batchApproveMutation.isPending}
+                      onClick={() => batchApproveMutation.mutate({ pipelineRunId: group.pipeline_run_id })}
+                    >
+                      <Check className="mr-1.5 h-3.5 w-3.5" />
+                      Approve all ({group.items.filter((i) => i.status === "draft").length})
+                    </Button>
+                  </div>
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    {group.items.map(renderCard)}
+                  </div>
+                </div>
+              ))}
+
+              {ungrouped.length > 0 && (
+                <div>
+                  {groups.length > 0 && (
+                    <p className="mb-3 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Other drafts</p>
+                  )}
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    {ungrouped.map(renderCard)}
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>

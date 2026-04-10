@@ -384,6 +384,30 @@ async function requestPipelineBResume() {
   }
 }
 
+async function requestPipelineCResume() {
+  const accessToken = await getAccessToken();
+
+  if (!accessToken) {
+    throw new Error("Your session expired. Please sign in again.");
+  }
+
+  const { error } = await supabase.functions.invoke("coordinator-chat", {
+    body: {
+      message: "resume pipeline c",
+      history: [],
+      confirmationAction: null,
+      orgId: ORG_ID,
+    },
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+
+  if (error) {
+    throw error;
+  }
+}
+
 export function getGetInboxSummaryQueryKey() {
   return ["inbox-summary", ORG_ID] as const;
 }
@@ -494,6 +518,10 @@ export function useActionInboxItem(options?: MutationHookOptions) {
         }
       }
 
+      if (inboxRow.item_type === "campaign_brief" && inboxRow.created_by_pipeline === "pipeline-c-campaign" && data.action !== "read") {
+        await requestPipelineCResume();
+      }
+
       return { id, action: data.action };
     },
     ...options?.mutation,
@@ -588,6 +616,23 @@ export function useActionContent(options?: MutationHookOptions) {
       }
 
       return { id, action: data.action };
+    },
+    ...options?.mutation,
+  });
+}
+
+export function useBatchApproveContent(options?: MutationHookOptions) {
+  return useMutation({
+    mutationFn: async ({ pipelineRunId }: { pipelineRunId: string }) => {
+      const { error } = await supabase
+        .from("content_registry")
+        .update({ status: "scheduled" })
+        .eq("pipeline_run_id", pipelineRunId)
+        .eq("status", "draft")
+        .eq("org_id", ORG_ID);
+
+      if (error) throw error;
+      return { pipelineRunId };
     },
     ...options?.mutation,
   });

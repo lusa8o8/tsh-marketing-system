@@ -355,6 +355,8 @@ async function resumePipelineCRun(params: { supabase: any; anthropic: Anthropic;
           subject_line: asset.subject_line ?? null,
           status: 'draft',
           is_campaign_post: true,
+          campaign_name: campaignBrief.name,
+          pipeline_run_id: runId,
           scheduled_at: getScheduledTime(asset.day_offset, context.today),
           created_by: 'pipeline-c-campaign'
         })
