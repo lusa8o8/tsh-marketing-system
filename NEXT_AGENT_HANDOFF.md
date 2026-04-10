@@ -73,10 +73,10 @@ Committed and pushed:
 - `SAMM_IMPLEMENTATION_ROADMAP.md`
 
 ## Latest Important Commits
+- `a127214 fix: query waiting_human run directly in scheduler resume path`
 - `ae5138c fix: accept scheduler org_id for pipeline b and c`
 - `16119f9 docs: add pipeline b and c stability milestones`
 - `63fc7a4 docs: update handoff for pipeline b slice`
-- `1b9f173 refactor: rebuild pipeline a on shared engine`
 
 These are already pushed to `main`.
 
@@ -98,46 +98,68 @@ Verified:
 - Pipeline C invocation from `coordinator-chat` is stable again
 - both deployed functions accept the scheduler-style `org_id` payload
 - hosted direct invocation returned `ok: true` for both pipelines after deployment
+- Pipeline C first human gate is now implemented and deployed
+- hosted direct invocation of Pipeline C now returns `waiting_human: true` and creates a real CEO `campaign_brief` inbox item
 
 ## Exact Next Slice
 ### Goal
-Add resumable human-gate execution for Pipeline B without widening scope into Pipeline C or broader engine refactors.
+Add the first long-window resumable gate for Pipeline C without widening scope into the second human gate or the monitoring loop.
 
 ### Required workflow
 1. Discovery:
-   - read the current `pipeline-b-weekly` implementation end to end
-   - map fetch, planning, drafting, approval, publish, ambassador update, and reporting phases
-   - inspect current Inbox and Content approval actions that touch draft state
+   - read the current `pipeline-c-campaign` implementation end to end
+   - map research, brief generation, copy creation, design brief, approval, scheduling, monitoring, and reporting phases
+   - inspect current Inbox and Content actions that can already carry campaign brief and draft approvals
    - inspect the scheduler and shared pipeline status contract for pause/resume hooks
 2. Diagnosis:
-   - state exactly which parts of Pipeline B are still hardcoded
-   - separate minimum persisted human-gate requirements from optional future abstractions
+   - state exactly which parts of Pipeline C are still hardcoded
+   - separate the minimum first human-gate slice from later marketer-gate and monitoring-loop work
 3. Plan:
-   - define the smallest slice that introduces `waiting_human` and `resumed` behavior while preserving current outputs
+   - define the smallest slice that introduces a real persisted CEO campaign-brief gate with `waiting_human` and `resumed`
 4. Edit:
-   - keep the first resumable-gate slice narrow and reversible
+   - keep the first Pipeline C gate slice narrow and reversible
 5. Verify:
-   - initial Pipeline B run pauses cleanly in `waiting_human`
-   - direct hosted resume returns `waiting_human` again while drafts are still pending
-   - approval or rejection flows trigger resume through scheduler-backed behavior
-   - Pipeline B draft approvals are visible and actionable from Inbox, not just Content
-   - coordinator-backed resume no longer fails on downstream edge auth
-   - completed runs exit cleanly to `success` or `cancelled` without breaking Inbox or Content review UX
-   - reporting still lands in Inbox
+   - initial Pipeline C run creates a persisted run row and pauses cleanly in `waiting_human`
+   - the CEO campaign brief is visible and actionable from Inbox
+   - approval triggers resume through scheduler-backed behavior
+   - rejection exits cleanly to `cancelled`
+   - do not widen the first checkpoint into the marketer gate or monitor-loop resumability unless required for a clean runtime path
 6. Commit stable slice
 7. Push if requested
 
-## Why Pipeline B Is Next
-- the roadmap and architecture docs define Pipeline B as the first real resumable human-gate workflow
-- it already has a natural draft-approval pause point
-- it is a smaller resumability problem than Pipeline C
-- it exercises the next major architectural boundary after Pipeline A engine conversion and Milestone 5A stabilization
+## Current Milestone 7 State
+Implemented, deployed, and verified end to end:
+- `pipeline-c-campaign` creates a real `pipeline_runs` row
+- the initial Pipeline C run stops after campaign brief creation with `waiting_human`
+- the run persists `campaign_brief_inbox_id`, `campaign_brief`, and `calendar_event` into `pipeline_runs.result`
+- Pipeline C accepts `resume_run_id`
+- Inbox approval actions trigger `resume pipeline c` through `coordinator-chat`
+- the scheduler `resumePipelineRun` now queries `pipeline_runs` directly for the `waiting_human` run instead of relying on the pre-loaded 8-row snapshot
+
+Bug fixed and committed (`a127214`):
+- root cause: `resumePipelineRun` used `getLatestPipelineRun(runs, pipeline.id)` from the pre-loaded runs snapshot, which is limited to 8 rows across all pipelines. With 31 total runs across 4 pipelines, the pipeline C `waiting_human` run could fall outside the snapshot or a more recent terminal-state run could be returned instead, causing the resume to silently no-op.
+- fix: `resumePipelineRun` now does a targeted query for the most recent `waiting_human` run for the pipeline, bypassing the snapshot entirely.
+
+Verified:
+- direct hosted invocation of `pipeline-c-campaign` with `resume_run_id: 6a314f0b` returned `ok: true, resumed: true, copy_assets_created: 6, errors: []`
+- run `6a314f0b` is now `success` in the DB
+- `coordinator-chat` deployed with the fix
+
+## Exact Next Slice
+### Goal
+Run a clean end-to-end browser test of the Pipeline C approval-to-resume flow from the app itself, then mark Milestone 7 first gate as fully verified and commit that as the stable checkpoint.
+
+## Why Pipeline C Is Next
+- the roadmap and architecture docs define Pipeline C as the next major execution milestone after Pipeline B resumability
+- it is the first true long-window workflow with multiple human gates
+- the first CEO brief gate is the smallest meaningful checkpoint that proves Pipeline C can pause and resume across sessions without batching the full campaign lifecycle into one rewrite
 
 ## After This Slice
-1. Add long-window resumable execution for Pipeline C.
-2. Move to onboarding/capability-template work once the execution core is stable.
-3. Add usage metering and billing enforcement.
-4. Swap mocked adapters for live provider APIs only after the engine and gate boundaries are stable.
+1. Add the second Pipeline C human gate for marketer approval of campaign assets.
+2. Add Pipeline C monitoring-loop and post-campaign resumability.
+3. Move to onboarding/capability-template work once the execution core is stable.
+4. Add usage metering and billing enforcement.
+5. Swap mocked adapters for live provider APIs only after the engine and gate boundaries are stable.
 
 ## Relevant Files
 ### Frontend
@@ -171,12 +193,16 @@ Add resumable human-gate execution for Pipeline B without widening scope into Pi
 - Milestone 5A is already complete and pushed
 - Milestone 6 is now verified through the real browser app flow for Pipeline B pause/resume
 - the next major roadmap slice is Milestone 7 for Pipeline C long-window execution
+- the active Milestone 7 checkpoint is only the first CEO campaign-brief human gate
+- Milestone 7 first-gate implementation is deployed, but the approval-to-resume handoff is still the active blocker
 - if a resumed session breaks mid-build, reread the docs first and verify git state before continuing
 - latest hosted Milestone 6 verification: real Inbox approval now reaches `coordinator-chat`, `coordinator-chat` reaches `pipeline-b-weekly`, and Pipeline B resume no longer fails with `401` after the function auth config fix
 - Milestone 6 follow-up fixes included removing unsupported `content_registry` column writes from the UI approval path and exposing `draft_approval` rows in Inbox
 - the schema slice for Milestone 6 exists in `supabase/migrations/20260409161000_pipeline_runs_status_states.sql` and was applied with `supabase db push`
 - unresolved follow-up note: user observed a possible later `samm` behavior bug after the stable resume path was fixed; treat that as a separate investigation, not as part of the completed Milestone 6 gate/resume slice
 - the current local environment did not have `deno` installed, so local `deno check` was not available during parity verification
+- Milestone 7 resume bug fixed: `resumePipelineRun` in scheduler.ts now queries for `waiting_human` runs directly; commit `a127214`
+- supabase CLI is at `C:/Users/Lusa/.scoop/shims/supabase.exe` (not in the bash PATH; use that path directly)
 
 ## Constraints To Preserve
 - Do not do a broad `samm` workspace redesign yet.

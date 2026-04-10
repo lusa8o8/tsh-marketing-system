@@ -267,6 +267,12 @@ Commit policy:
 - one stable commit after full approval-resume flow is verified
 
 ## Milestone 7: Add Long-Window Campaign Execution For Pipeline C
+Status:
+- active
+- first CEO brief gate implemented and deployed
+- live verification in progress
+- current blocker is the approval-to-resume handoff after the Inbox `campaign_brief` action
+
 Goal:
 - support multi-step campaign workflows with multiple human gates and monitoring loops
 
@@ -277,10 +283,33 @@ Scope:
 - post-campaign closeout
 - explicit `waiting_human` and `resumed` transitions
 
+Active first slice:
+- add persisted `pipeline_runs` support for Pipeline C
+- replace demo auto-approval of the CEO campaign brief with a real `waiting_human` gate
+- add a resume path that continues only after CEO approval or exits cleanly on rejection
+- keep the first slice narrow and do not yet widen into the marketer draft-approval gate or the monitoring loop resume model
+
+Why this first:
+- it establishes the real long-window execution boundary for Pipeline C
+- it reuses the proven Milestone 6 persisted human-gate pattern from Pipeline B
+- it avoids batching both human gates and the monitoring loop into one risky checkpoint
+
 Verification:
+- initial Pipeline C run creates a persisted run row and pauses in `waiting_human` after the campaign brief is created
+- the CEO campaign brief is visible and actionable from Inbox
+- resume through scheduler-backed behavior moves the run forward only when the brief is approved
+- rejection exits the run cleanly to `cancelled`
 - a campaign can pause and resume across sessions
 - monitoring alerts land in Inbox
 - post-campaign report completes and closes the workflow cleanly
+
+Current verified state:
+- direct hosted invocation of `pipeline-c-campaign` returns `ok: true` with `waiting_human: true`
+- Operations shows the latest Pipeline C run in `waiting_human`
+- the CEO `campaign_brief` lands in Inbox correctly
+- Inbox approval triggers `resume pipeline c` through `coordinator-chat`
+- the scheduler `resumePipelineRun` bug has been fixed (`a127214`): it now queries for the `waiting_human` run directly rather than relying on the pre-loaded 8-row snapshot
+- end-to-end browser verification of the full approval-to-resume flow is the remaining open step before Milestone 7 first gate is fully closed
 
 Commit policy:
 - break this into multiple stable commits, not one large merge
