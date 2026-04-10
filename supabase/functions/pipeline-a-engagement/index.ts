@@ -323,52 +323,40 @@ async function classifyComment(
   comment: Comment,
   brandVoice: any,
 ): Promise<ClassifiedComment> {
-  void anthropic
-  void brandVoice
+  const response = await anthropic.messages.create({
+    model: 'claude-haiku-4-5-20251001',
+    max_tokens: 256,
+    system: `You are a comment classifier for a social media engagement system.
 
-  const text = comment.text.toLowerCase()
+Classify the comment into exactly one intent:
+- spam: promotional content, suspicious links, fake accounts, unsolicited advertising
+- complaint: negative service experience, payment issues, strong accusations of wrongdoing
+- boost: strong advocacy, success stories, viral-sharing potential, testimonials
+- routine: questions, general engagement, requests for information, neutral feedback
 
-  if (
-    text.includes('scam') ||
-    text.includes('terrible service') ||
-    text.includes('paid and got nothing') ||
-    text.includes('angry')
-  ) {
-    return {
-      ...comment,
-      intent: 'complaint',
-      reasoning: 'The comment reports a negative service experience and needs human follow-up.',
-    }
-  }
+Context about the organisation:
+- Tone: ${brandVoice.tone ?? 'professional'}
+- Audience: ${brandVoice.target_audience ?? 'students'}
 
-  if (
-    text.includes('bit.ly') ||
-    text.includes('make money online') ||
-    text.includes('click here')
-  ) {
-    return {
-      ...comment,
-      intent: 'spam',
-      reasoning: 'The comment looks promotional or malicious and should be ignored.',
-    }
-  }
+Respond with valid JSON only — no explanation, no markdown:
+{"intent":"spam|complaint|boost|routine","reasoning":"one sentence"}`,
+    messages: [
+      {
+        role: 'user',
+        content: `Platform: ${comment.platform}\nAuthor: ${comment.author}\nComment: ${comment.text}`,
+      },
+    ],
+  })
 
-  if (
-    text.includes('passed') ||
-    text.includes('shared this with my whole class') ||
-    text.includes('everyone loves it')
-  ) {
-    return {
-      ...comment,
-      intent: 'boost',
-      reasoning: 'The comment shows strong advocacy or success-story potential worth amplifying.',
-    }
-  }
+  const raw = response.content[0].type === 'text' ? response.content[0].text.trim() : ''
 
-  return {
-    ...comment,
-    intent: 'routine',
-    reasoning: 'The comment is a normal question or engagement item that can receive a standard reply.',
+  try {
+    const parsed = JSON.parse(raw) as { intent: Intent; reasoning: string }
+    return { ...comment, intent: parsed.intent, reasoning: parsed.reasoning }
+  } catch {
+    // Fallback: treat as routine if JSON parse fails
+    console.warn('classifyComment JSON parse failed, defaulting to routine. Raw:', raw)
+    return { ...comment, intent: 'routine', reasoning: 'Classification parse error — treated as routine.' }
   }
 }
 
@@ -377,19 +365,48 @@ async function draftReply(
   comment: ClassifiedComment,
   brandVoice: any,
 ): Promise<string> {
-  void anthropic
-
   const firstName = comment.author.split(' ')[0]
 
-  if (comment.intent === 'complaint') {
-    return `Hi ${firstName}, I'm really sorry to hear about your experience - that's definitely not what we want for any student. Please send us a direct message with your details so we can sort this out immediately and get you access to the resources you need!`
+  const intentGuidance: Record<Intent, string> = {
+    complaint: 'Acknowledge their frustration with genuine empathy. Invite them to DM for a resolution. Do not be defensive.',
+    boost: 'Express sincere appreciation for their advocacy. Reinforce the brand mission. Encourage sharing.',
+    routine: `Answer helpfully and warmly. End with the preferred CTA: "${brandVoice.preferred_cta ?? 'Learn more'}".`,
+    spam: '',
   }
 
-  if (comment.intent === 'boost') {
-    return `Hi ${firstName}, thank you for sharing this - stories like yours mean a lot to us. We're glad StudyHub helped, and we'd love to keep supporting your class with more exam prep resources.`
-  }
+  const response = await anthropic.messages.create({
+    model: 'claude-haiku-4-5-20251001',
+    max_tokens: 200,
+    system: `You are a community manager replying to social media comments on behalf of this organisation.
 
-  return `Hi ${firstName}, thanks for reaching out. You can find the latest StudyHub resources and exam prep support through our current student channels, and we're happy to help if you send us a direct message. ${brandVoice.cta_preference}`
+Brand voice:
+- Tone: ${brandVoice.tone ?? 'warm, professional'}
+- Audience: ${brandVoice.target_audience ?? 'university students'}
+- Always say: ${(brandVoice.always_say ?? []).join(', ') || 'nothing specific'}
+- Never say: ${(brandVoice.never_say ?? []).join(', ') || 'nothing specific'}
+${brandVoice.good_post_example ? `\nGood example post: "${brandVoice.good_post_example}"` : ''}
+
+Rules:
+- Address the person by first name (${firstName})
+- Maximum 2 sentences
+- No hashtags
+- Plain conversational text only`,
+    messages: [
+      {
+        role: 'user',
+        content: `Comment intent: ${comment.intent}
+Guidance: ${intentGuidance[comment.intent]}
+
+Platform: ${comment.platform}
+Comment: "${comment.text}"
+
+Write the reply:`,
+      },
+    ],
+  })
+
+  const reply = response.content[0].type === 'text' ? response.content[0].text.trim() : `Hi ${firstName}, thanks for reaching out — please DM us for more details.`
+  return reply
 }
 
 async function postDailyPoll(
