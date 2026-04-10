@@ -71,6 +71,8 @@ Current product stance:
 - Milestone 7C: batch approval in Content Registry — complete and browser-verified
 - Milestone 7D: marketer approval gate with inline edit and rejection loop — complete and browser-verified
 - Milestone 7E: design brief to Content Registry, image upload on copy cards, share button — complete and browser-verified
+- Milestone 8: multi-tenant infrastructure — session-derived org resolution + provision-org — complete, sign-in verified
+- Milestone 5B: real LLM classification and reply generation in Pipeline A — deployed, NOT yet browser-verified
 
 ### Architecture Docs
 Committed and pushed:
@@ -81,19 +83,38 @@ Committed and pushed:
 - `SAMM_FULL_SYSTEM_ARCHITECTURE.md`
 
 ## Latest Important Commits
+- `ac0909d fix: replace unresolved react-icons brand imports with lucide equivalents`
+- `e91da84 feat: wire Operations overview + settings — manual triggers, connection toggles, full integration list`
+- `33477a9 feat: real LLM classification and reply generation in Pipeline A (Milestone 5B)`
+- `4c816f7 feat: multi-tenant infrastructure — session-derived org resolution + provision-org (Milestone 8)`
+- `152023b docs: lock Milestone 8 plan and full product vision M8–M16 in roadmap`
 - `c06ba39 fix: design brief prompt enforces plain text, no markdown formatting`
-- `cb6b32d fix: design brief card strip markdown in preview, hide actions when collapsed`
-- `19c61bd fix: design brief card full width, markdown rendering, platform constraint migration`
 - `eec038d feat: design brief to Content Registry, image upload, share button (Milestone 7E)`
-- `2d7db3a fix: map fyi mark-read action to actioned status (not read)`
-- `49decf2 feat: marketer approval gate with inline edit and rejection loop (Milestone 7D)`
 
 All pushed to `main`.
 
 ## Current Status
-Stable through Milestone 7E.
+Stable through Milestone 8 (browser-verified sign-in). Build passes clean.
 
-### Pipeline C end-to-end verified flow:
+### Untested slice — requires browser verification before treating as stable:
+**Operations wiring + Settings broadening** (`e91da84` + `ac0909d`)
+- Overview: "Run now" button per pipeline, result summary in runs table
+- Settings → Integrations: Connect/Disconnect writes to `platform_connections` in `org_config`, full integration list (5 live + 5 coming soon)
+- Settings → Pipeline Automation: "Run now" button per pipeline inline with schedule controls
+- `api.ts`: `useTriggerPipeline` mutation added
+
+**Also needs verification:**
+- Milestone 5B: Pipeline A now uses real LLM (`classifyComment` + `draftReply`) — deployed, trigger from Overview or samm chat and check Inbox for escalations and Content Registry for replies
+
+### Verification checklist (do before next feature work):
+1. Sign in → verify dashboard loads (Milestone 8 session-derived org)
+2. Settings → Integrations → Connect Facebook → verify toggle flips and badge updates
+3. Settings → Pipelines → "Run now" on Engagement Pipeline → verify toast + run appears in Overview
+4. Overview → "Run now" on Pipeline A → verify run starts, result summary shows comments/replies/escalations
+5. Inbox → check escalation for the complaint comment (Angry Student) has an LLM-drafted suggested response
+6. Content Registry → Published tab → check reply copy reads naturally (not a hardcoded template)
+
+### Pipeline C end-to-end verified flow (still valid):
 1. `/samm` triggers Pipeline C → `running`
 2. Research phase (parallel) + campaign planner → campaign brief created
 3. Run pauses at `waiting_human` — campaign brief lands in Inbox
@@ -105,81 +126,69 @@ Stable through Milestone 7E.
 9. Approve all (batch or individual) → pipeline resumes → monitor + report → campaign report in Inbox → `success`
 10. Reject a draft → revision request in Inbox → marketer edits and resubmits in Content Registry → approve → resume
 
-### Three verified approval paths:
-1. Batch approve → resume → success
-2. Reject → revision request → edit & resubmit → approve → resume → success
-3. Inline edit (no reject) → save → approve → resume → success
-
-### Approval surface boundary (established and stable):
-- **Inbox**: workflow decisions only — campaign brief, campaign report, escalations, suggestions, revision requests
-- **Content Registry**: content review only — all copy assets land here as `draft`; rejected cards editable with "Edit & resubmit"
-
-### Content Registry draft tab includes:
-- `draft` status rows
-- `pending_approval` rows
-- `rejected` rows (editable with "Edit & resubmit"; orange badge)
-
-## Known Pipeline A Stubs (critical — must not be forgotten)
-Pipeline A classification and reply generation are NOT using the LLM. Both `classifyComment` and `draftReply` have `void anthropic` placeholders — Claude is explicitly discarded.
-
-Current state:
-- `classifyComment`: keyword matching only; no LLM call; brand voice ignored
-- `draftReply`: hardcoded template strings only; no LLM call; brand voice partially used in one template only
-- comment source: `getMockComments()` — 7 hardcoded mock comments, no live platform API reads
-- spam/complaint ordering bug: `'scam'` keyword check runs in the complaint branch BEFORE the spam check, so spam URLs containing the word `scam` (e.g. `bit.ly/scam123`) are incorrectly classified as complaints
+## Known Pipeline A Stubs (updated)
+- `classifyComment`: NOW uses real LLM (claude-haiku) — returns `{intent, reasoning}` JSON, fallback to routine on parse error
+- `draftReply`: NOW uses real LLM — brand-voice-aware, uses tone/audience/always_say/never_say/preferred_cta/good_post_example
+- comment source: `getMockComments()` — 7 hardcoded mock comments, no live platform API reads (Milestone 11)
+- spam/complaint ordering bug: FIXED — LLM handles intent, no keyword ordering issue
 
 Milestone placement:
-- **Milestone 5B** (planned): enable real LLM classification and reply generation — does NOT require live APIs, can be done anytime
-- **Milestone 10**: real comment fetching from Facebook, WhatsApp, YouTube APIs
+- **Milestone 11**: real comment fetching from Facebook, WhatsApp, YouTube APIs
 
-Already fixed this session:
-- boost suggestion priority changed from `normal` to `fyi` — shows "Mark read" instead of Approve/Reject, since the reply is already written before the inbox item is created
+## Multi-Tenancy State (Milestone 8)
+### What is live:
+- `supabase.ts`: hardcoded `ORG_ID` replaced with reactive `getOrgId()` backed by `onAuthStateChange`
+- `api.ts`: all 40+ `org_id` references use `getOrgId()` — live session always used
+- `provision-org` edge function: deployed — creates default `org_config` + stamps `org_id` into `app_metadata`
+- `login.tsx`: signup toggle — `signUp` → `provision-org` → `refreshSession()` → inbox
+- Dev fallback: `DEV_ORG_ID = "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11"` used when `app_metadata.org_id` is absent
+
+### Existing TSH user:
+- `ops@tsh.com` does NOT have `org_id` in `app_metadata` — falls back to `DEV_ORG_ID` automatically
+- All their data is already scoped to that UUID — fallback is correct
+- Optional: stamp it manually via Supabase SQL editor if you want JWT parity:
+  ```sql
+  UPDATE auth.users
+  SET raw_app_meta_data = jsonb_set(COALESCE(raw_app_meta_data, '{}'::jsonb), '{org_id}', '"a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11"')
+  WHERE email = 'ops@tsh.com';
+  ```
 
 ## Exact Next Slice
-### Milestone 8: Multi-Tenant Infrastructure
+### Verify untested work first
+Run the verification checklist above. If anything is broken, fix it before proceeding to the next milestone.
 
-Milestones 7 through 7E are all complete. The next slice is Milestone 8.
+### After verification: Milestone 10 — Editable Calendar + NL Commands
+(Milestones 8B and 9 are deferred)
 
-### What is already built
-- Supabase auth (login/signup screen exists, branded as samm)
-- `org_config` table with `brand_voice`, `kpi_targets`, `org_name`, `timezone`
-- All pipeline DB queries already scope by `org_id` — data isolation is complete
-- `coordinator-chat` reads `org_id` from `user.app_metadata?.org_id`
+What Milestone 10 delivers:
+1. Calendar becomes writable from the UI (add, edit, delete events — currently read-only)
+2. `coordinator-chat` extended to handle "schedule a post about X next Friday" — resolves event, queues Pipeline C
+3. On-demand Pipeline C trigger from a chat command, not just cron
 
-### What needs building
-1. **Frontend org resolution** — replace hardcoded `ORG_ID` constant in `supabase.ts` with a function that reads `org_id` from the auth session. Propagate to all `api.ts` query hooks.
-2. **Auto-provisioning** — edge function or DB trigger that creates a default `org_config` row when a new user signs up. Default includes: brand voice placeholder, default KPI targets, all pipelines enabled.
+### Remaining milestone queue (8B and 9 deferred):
+- **M10**: Editable Calendar + NL Commands
+- **M11**: Live Platform Publishing (Facebook, WhatsApp, YouTube, Email real API calls)
+- **M12**: Multi-Channel samm Access (Slack, Teams, WhatsApp, Telegram, email inbound)
+- **M13**: Voice Interface
+- **M14**: Dashless Operation (Google Sheets, Docs, Excel)
+- **M15**: Visual Plugin Builder
+- **M16**: Sales and CRM Integration
 
-### Deferred from this slice
-- Onboarding UI flow (4-5 screen wizard) — Milestone 8B
-- Capability flags and sidebar filtering — after broad integration coverage
-- Progressive narrowing (ambassador vs affiliate vs UGC) — after broad integration coverage
-- Usage metering and billing enforcement
-
-### Full product roadmap
-See `SAMM_IMPLEMENTATION_ROADMAP.md` for full milestone list including:
-- M8B: Onboarding flow UI
-- M9: Copy quality check (Pipeline C phase 3 critic)
-- M10: Editable calendar + NL calendar commands
-- M11: Live platform publishing
-- M12: Multi-channel access (Slack, Teams, WhatsApp, Telegram, email)
-- M13: Voice interface
-- M14: Dashless operation (Google Sheets, Docs, Excel)
-- M15: Visual plugin builder (n8n-style)
-- M16: Sales and CRM integration
-
-### Architecture vision to carry forward
-Go broad by default — all connectors, agents, and pipelines available to every org. Narrowing comes later via onboarding questions that set capability flags. Each channel (Slack, Teams, WhatsApp) is a plugin in the integration registry — adding a new channel does not touch core scheduler or pipelines. Inbox = workflow decisions. Content Registry = all content assets.
+### Deferred (revisit after broad integration coverage):
+- **M8B**: Onboarding Flow UI (4-5 screen wizard)
+- **M9**: Copy Quality Check (Pipeline C phase 3 critic)
 
 ## Relevant Files
 ### Frontend
-- `M.A.S UI/src/pages/content.tsx` — Content Registry UI, has Drafts tab with Approve/Reject
+- `M.A.S UI/src/pages/content.tsx` — Content Registry UI
 - `M.A.S UI/src/pages/inbox.tsx` — Inbox UI
-- `M.A.S UI/src/lib/api.ts` — all mutations: useActionContent, useActionInboxItem, useBatchApproveContent, useEditContent, useUploadContentImage
-- `M.A.S UI/src/lib/supabase.ts` — ORG_ID hardcoded constant (Milestone 8 changes this to session-derived)
+- `M.A.S UI/src/pages/agent/overview.tsx` — Operations Overview, pipeline status cards + run table + Run now buttons
+- `M.A.S UI/src/pages/agent/settings.tsx` — Org config, brand voice, integrations (wired), pipeline automation (with Run now)
+- `M.A.S UI/src/lib/api.ts` — all mutations including `useTriggerPipeline`, `useActionContent`, `useUploadContentImage`
+- `M.A.S UI/src/lib/supabase.ts` — `getOrgId()` reactive function, `signUp()`, dev fallback constant
 
 ### Supabase
-- `supabase/functions/pipeline-a-engagement/index.ts` — Pipeline A; classifyComment and draftReply are stubbed
+- `supabase/functions/pipeline-a-engagement/index.ts` — Pipeline A; classifyComment and draftReply now use real LLM
 - `supabase/functions/pipeline-b-weekly/index.ts`
 - `supabase/functions/pipeline-c-campaign/index.ts`
 - `supabase/functions/coordinator-chat/index.ts`
@@ -188,6 +197,7 @@ Go broad by default — all connectors, agents, and pipelines available to every
 - `supabase/functions/_shared/agent-registry.ts`
 - `supabase/functions/_shared/integration-registry.ts`
 - `supabase/functions/_shared/pipeline-run-status.ts`
+- `supabase/functions/provision-org/index.ts` — new: org provisioning on signup
 
 ### Architecture Source Of Truth
 - `SAMM_RUNTIME_SPEC.md`
@@ -199,14 +209,16 @@ Go broad by default — all connectors, agents, and pipelines available to every
 ## Important Operational Notes
 - `ANTHROPIC_API_KEY` already exists in hosted Supabase Edge Function secrets
 - supabase CLI is at `C:/Users/Lusa/.scoop/shims/supabase.exe` (not in the bash PATH; use that path directly)
-- git is at `/c/Program\ Files/Git/cmd/git.exe` (not in bash PATH)
+- git is at `/c/Program\ Files/Git/cmd/git.exe` (not in bash PATH) — use `"C:/Program Files/Git/cmd/git.exe"`
+- npm is at `"/c/Program Files/nodejs/npm.cmd"` — use full path, run from `M.A.S UI` directory
 - Python is at `/c/Python314/python.exe`
-- `cat`, `ls`, `head`, `grep`, `find` are not available in bash — use Read, Glob, Grep tools instead
+- `cat`, `ls`, `head`, `grep`, `find`, `dir` are not available in bash — use Read, Glob, Grep tools instead
 - local environment does not have `deno` installed — no local `deno check` available
 - the schema slice for Milestone 6 exists in `supabase/migrations/20260409161000_pipeline_runs_status_states.sql`
 - content_registry status lifecycle: `draft` → `scheduled` (on approval) or `rejected`; `published` is written directly by Pipeline B mock publisher
 - pipeline_runs status lifecycle: `running` → `waiting_human` → `resumed` → `success` / `failed` / `cancelled`
 - the 54-second Pipeline C resume runs in background via `EdgeRuntime.waitUntil` — coordinator-chat returns immediately
+- build command: `cd "C:/Users/Lusa/tsh-marketing-system/M.A.S UI" && "/c/Program Files/nodejs/npm.cmd" run build`
 
 ## Constraints To Preserve
 - Do not do a broad `samm` workspace redesign yet.

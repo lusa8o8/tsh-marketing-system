@@ -241,8 +241,7 @@ Commit policy:
 
 ## Milestone 5B: Enable Real LLM Classification And Reply Generation In Pipeline A
 Status:
-- planned
-- boost suggestion FYI fix already applied (commit in this session)
+- deployed, awaiting browser verification
 
 Goal:
 - replace the keyword-matching classifier and hardcoded reply templates in Pipeline A with real LLM calls
@@ -552,7 +551,10 @@ Commit policy:
 
 ## Milestone 8: Multi-Tenant Infrastructure
 Status:
-- next slice
+- complete
+- session-derived org resolution live, sign-in verified
+- provision-org edge function deployed
+- signup toggle added to login page
 
 Goal:
 - make the system genuinely multi-tenant without manual table surgery
@@ -596,6 +598,28 @@ Verification:
 Commit policy:
 - one stable commit for the frontend org resolution change
 - one stable commit for the auto-provisioning trigger/function
+
+## Milestone 8A: Operations Wiring + Settings Broadening
+Status:
+- build passes, awaiting browser verification
+
+Goal:
+- make Operations Overview and Settings actionable surfaces, not just read-only displays
+
+Delivered:
+- Overview: "Run now" button per pipeline (disabled while running/waiting_human); result summary in runs table (comments, replies, escalations, drafts)
+- Settings → Integrations: Connect/Disconnect writes to `platform_connections` in `org_config`; switch is live; full integration list — 5 active channels (Facebook, WhatsApp, YouTube, Email, StudyHub) + 5 coming soon (LinkedIn, TikTok, Slack, Teams, Telegram)
+- Settings → Pipeline Automation: "Run now" button per pipeline inline with schedule controls
+- `api.ts`: `useTriggerPipeline` mutation — calls `coordinator-chat` with `run pipeline x`
+
+Verification checklist:
+- Sign in, navigate to Settings → Integrations → Connect Facebook → badge and switch update
+- Settings → Pipelines → Run now on Engagement Pipeline → toast + run appears in Overview table
+- Overview → Run now on Pipeline A → run starts, result summary shows comments/replies/escalations
+- Inbox → complaint escalation has LLM-drafted suggested response (not hardcoded template)
+
+Commit policy:
+- committed `e91da84` + fix `ac0909d` — pending browser verification
 
 ## Milestone 8B: Onboarding Flow UI
 Status:
