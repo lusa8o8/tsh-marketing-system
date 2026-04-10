@@ -1091,5 +1091,30 @@ export function useCoordinatorChat(options?: MutationHookOptions) {
   });
 }
 
+export function useTriggerPipeline(options?: MutationHookOptions) {
+  return useMutation({
+    mutationFn: async ({ pipeline }: { pipeline: "a" | "b" | "c" }) => {
+      const accessToken = await getAccessToken();
+      if (!accessToken) throw new Error("Your session expired. Please sign in again.");
 
+      const messageMap = {
+        a: "run pipeline a",
+        b: "run pipeline b",
+        c: "run pipeline c",
+      };
 
+      const { error } = await supabase.functions.invoke("coordinator-chat", {
+        body: {
+          message: messageMap[pipeline],
+          history: [],
+          confirmationAction: null,
+          orgId: getOrgId(),
+        },
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+
+      if (error) throw error;
+    },
+    ...options?.mutation,
+  });
+}

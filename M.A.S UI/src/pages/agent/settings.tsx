@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
-import { useGetOrgConfig, useUpdateOrgConfig, getGetOrgConfigQueryKey } from "@/lib/api";
+import { useGetOrgConfig, useUpdateOrgConfig, useTriggerPipeline, getGetOrgConfigQueryKey } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
-import { Save, Building, MessageSquare, Share2, GitBranch, Target, Check, AlertCircle } from "lucide-react";
+import { Save, Building, MessageSquare, Share2, GitBranch, Target, Check, AlertCircle, Play } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -10,13 +10,27 @@ import { Switch } from "@/components/ui/switch";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
-import { SiFacebook, SiWhatsapp, SiYoutube } from "react-icons/si";
-import { Mail } from "lucide-react";
+import { SiFacebook, SiWhatsapp, SiYoutube, SiLinkedin, SiTiktok, SiSlack, SiTelegram } from "react-icons/si";
+import { Mail, Monitor } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+
+const INTEGRATIONS = [
+  { id: "facebook",  name: "Facebook Pages",            Icon: SiFacebook,  color: "#1877F2", live: true },
+  { id: "whatsapp",  name: "WhatsApp Business",         Icon: SiWhatsapp,  color: "#25D366", live: true },
+  { id: "youtube",   name: "YouTube Channel",           Icon: SiYoutube,   color: "#FF0000", live: true },
+  { id: "email",     name: "Email (SendGrid)",           Icon: Mail,        color: "#000",    live: true },
+  { id: "studyhub",  name: "StudyHub App",              Icon: Building,    color: "#000",    live: true },
+  { id: "linkedin",  name: "LinkedIn Page",             Icon: SiLinkedin,  color: "#0A66C2", live: false },
+  { id: "tiktok",    name: "TikTok Account",            Icon: SiTiktok,    color: "#010101", live: false },
+  { id: "slack",     name: "Slack Workspace",           Icon: SiSlack,     color: "#4A154B", live: false },
+  { id: "teams",     name: "Microsoft Teams",           Icon: Monitor,     color: "#6264A7", live: false },
+  { id: "telegram",  name: "Telegram Channel",          Icon: SiTelegram,  color: "#26A5E4", live: false },
+];
 
 export default function AgentSettings() {
   const { data: config, isLoading } = useGetOrgConfig();
   const updateMutation = useUpdateOrgConfig();
+  const triggerPipeline = useTriggerPipeline();
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -42,6 +56,41 @@ export default function AgentSettings() {
       initialized.current = true;
     }
   }, [config]);
+
+  const [triggeringPipeline, setTriggeringPipeline] = useState<string | null>(null);
+
+  async function handleTriggerPipeline(pipeline: "a" | "b" | "c", label: string) {
+    setTriggeringPipeline(pipeline);
+    try {
+      await triggerPipeline.mutateAsync({ pipeline });
+      toast({ title: "Pipeline triggered", description: `${label} run queued.` });
+    } catch (err) {
+      toast({ title: "Trigger failed", description: (err as Error).message, variant: "destructive" });
+    } finally {
+      setTriggeringPipeline(null);
+    }
+  }
+
+  function handleToggleConnection(platformId: string, currentlyConnected: boolean) {
+    const updated = { ...config.platform_connections };
+    if (currentlyConnected) {
+      delete updated[platformId];
+    } else {
+      updated[platformId] = { connected: true, connected_at: new Date().toISOString() };
+    }
+    updateMutation.mutate(
+      { data: { platform_connections: updated } },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: getGetOrgConfigQueryKey() });
+          toast({
+            title: currentlyConnected ? "Integration disabled" : "Integration enabled",
+            description: `${platformId} connection ${currentlyConnected ? "removed" : "saved"}.`,
+          });
+        },
+      }
+    );
+  }
 
   const handleSave = (sectionKey: string, data: any) => {
     const payload = { [sectionKey]: data };
@@ -76,7 +125,7 @@ export default function AgentSettings() {
           {value.map((tag, i) => (
             <Badge key={i} variant="secondary" className="flex items-center gap-1 bg-muted">
               {tag}
-              <span className="ml-1 cursor-pointer text-muted-foreground hover:text-foreground" onClick={() => onChange(value.filter((_, idx) => idx !== i))}>�</span>
+              <span className="ml-1 cursor-pointer text-muted-foreground hover:text-foreground" onClick={() => onChange(value.filter((_, idx) => idx !== i))}>�</span>
             </Badge>
           ))}
         </div>
@@ -221,39 +270,58 @@ export default function AgentSettings() {
                 </div>
               </AccordionTrigger>
               <AccordionContent className="px-4 pb-6 pt-2">
-                <div className="mb-6 flex items-center justify-center rounded-md border border-dashed bg-muted/30 p-3 text-xs text-muted-foreground">
+                <div className="mb-4 flex items-center justify-center rounded-md border border-dashed bg-muted/30 p-3 text-xs text-muted-foreground">
                   API credentials are managed securely in the backend and never displayed here.
                 </div>
 
-                <div className="space-y-3">
-                  {[
-                    { id: "facebook", name: "Facebook Pages", icon: SiFacebook, color: "#1877F2" },
-                    { id: "whatsapp", name: "WhatsApp Business", icon: SiWhatsapp, color: "#25D366" },
-                    { id: "youtube", name: "YouTube Channel", icon: SiYoutube, color: "#FF0000" },
-                    { id: "email", name: "Email Provider (SendGrid)", icon: Mail, color: "#000" },
-                    { id: "studyhub", name: "StudyHub App", icon: Building, color: "#000" }
-                  ].map((platform) => {
-                    const isConnected = !!config.platform_connections[platform.id];
+                <div className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/60">Active channels</div>
+                <div className="mb-5 space-y-2">
+                  {INTEGRATIONS.filter((p) => p.live).map(({ id, name, Icon, color }) => {
+                    const isConnected = !!config.platform_connections[id];
                     return (
-                      <div key={platform.id} className="flex items-center justify-between rounded-lg border bg-background p-3">
+                      <div key={id} className="flex items-center justify-between rounded-lg border bg-background p-3">
                         <div className="flex items-center gap-3">
-                          <platform.icon style={{ color: platform.color }} className="h-5 w-5" />
-                          <span className="text-sm font-medium">{platform.name}</span>
+                          <Icon style={{ color }} className="h-5 w-5 shrink-0" />
+                          <span className="text-sm font-medium">{name}</span>
                           {isConnected ? (
                             <Badge variant="outline" className="h-5 border-green-200 bg-green-50 px-1.5 text-[10px] text-green-700">Connected</Badge>
                           ) : (
-                            <Badge variant="outline" className="h-5 px-1.5 text-[10px] text-muted-foreground">Not Connected</Badge>
+                            <Badge variant="outline" className="h-5 px-1.5 text-[10px] text-muted-foreground">Not connected</Badge>
                           )}
                         </div>
-                        <div className="flex items-center gap-4">
-                          <Switch checked={isConnected} disabled />
-                          <Button size="sm" variant={isConnected ? "outline" : "default"} className="h-8 w-24 text-xs">
-                            {isConnected ? "Re-auth" : "Connect"}
+                        <div className="flex items-center gap-3">
+                          <Switch
+                            checked={isConnected}
+                            disabled={updateMutation.isPending}
+                            onCheckedChange={() => handleToggleConnection(id, isConnected)}
+                          />
+                          <Button
+                            size="sm"
+                            variant={isConnected ? "outline" : "default"}
+                            className="h-8 w-28 text-xs"
+                            disabled={updateMutation.isPending}
+                            onClick={() => handleToggleConnection(id, isConnected)}
+                          >
+                            {isConnected ? "Disconnect" : "Connect"}
                           </Button>
                         </div>
                       </div>
                     );
                   })}
+                </div>
+
+                <div className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/60">Coming soon</div>
+                <div className="space-y-2">
+                  {INTEGRATIONS.filter((p) => !p.live).map(({ id, name, Icon, color }) => (
+                    <div key={id} className="flex items-center justify-between rounded-lg border border-dashed bg-muted/20 p-3 opacity-60">
+                      <div className="flex items-center gap-3">
+                        <Icon style={{ color }} className="h-5 w-5 shrink-0" />
+                        <span className="text-sm font-medium">{name}</span>
+                        <Badge variant="outline" className="h-5 px-1.5 text-[10px] text-muted-foreground">Coming soon</Badge>
+                      </div>
+                      <Button size="sm" variant="outline" className="h-8 w-28 text-xs" disabled>Connect</Button>
+                    </div>
+                  ))}
                 </div>
               </AccordionContent>
             </AccordionItem>
@@ -281,6 +349,9 @@ export default function AgentSettings() {
                     <div className="flex items-center gap-3">
                       <Label className="w-24 text-xs">Run time (Daily)</Label>
                       <Input type="time" value={pipelineData.pipeline_a_run_time} onChange={(e) => setPipelineData({ ...pipelineData, pipeline_a_run_time: e.target.value })} className="h-8 w-32 text-xs" disabled={!pipelineData.pipeline_a_enabled} />
+                      <Button size="sm" variant="outline" className="ml-auto h-8 gap-1.5 text-xs" disabled={triggeringPipeline === "a" || !pipelineData.pipeline_a_enabled} onClick={() => handleTriggerPipeline("a", "Engagement pipeline")}>
+                        <Play className="h-3 w-3" />{triggeringPipeline === "a" ? "Starting…" : "Run now"}
+                      </Button>
                     </div>
                   </div>
 
@@ -302,6 +373,9 @@ export default function AgentSettings() {
                         <option value="Friday">Friday</option>
                       </select>
                       <Input type="time" value={pipelineData.pipeline_b_run_time} onChange={(e) => setPipelineData({ ...pipelineData, pipeline_b_run_time: e.target.value })} className="h-8 w-32 text-xs" disabled={!pipelineData.pipeline_b_enabled} />
+                      <Button size="sm" variant="outline" className="ml-auto h-8 gap-1.5 text-xs" disabled={triggeringPipeline === "b" || !pipelineData.pipeline_b_enabled} onClick={() => handleTriggerPipeline("b", "Content drafting pipeline")}>
+                        <Play className="h-3 w-3" />{triggeringPipeline === "b" ? "Starting…" : "Run now"}
+                      </Button>
                     </div>
                   </div>
 
@@ -311,7 +385,12 @@ export default function AgentSettings() {
                         <h4 className="text-sm font-medium">Campaign Builder Pipeline</h4>
                         <p className="text-xs text-muted-foreground">End-to-end campaign creation</p>
                       </div>
-                      <Switch checked={pipelineData.pipeline_c_enabled} onCheckedChange={(v) => setPipelineData({ ...pipelineData, pipeline_c_enabled: v })} />
+                      <div className="flex items-center gap-3">
+                        <Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs" disabled={triggeringPipeline === "c" || !pipelineData.pipeline_c_enabled} onClick={() => handleTriggerPipeline("c", "Campaign builder pipeline")}>
+                          <Play className="h-3 w-3" />{triggeringPipeline === "c" ? "Starting…" : "Run now"}
+                        </Button>
+                        <Switch checked={pipelineData.pipeline_c_enabled} onCheckedChange={(v) => setPipelineData({ ...pipelineData, pipeline_c_enabled: v })} />
+                      </div>
                     </div>
                     <div className="flex items-start gap-3 rounded-md border border-amber-100 bg-amber-50/50 p-3">
                       <Switch checked={pipelineData.pipeline_c_auto_approve} onCheckedChange={(v) => setPipelineData({ ...pipelineData, pipeline_c_auto_approve: v })} disabled={!pipelineData.pipeline_c_enabled} />
