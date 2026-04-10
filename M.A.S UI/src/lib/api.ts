@@ -814,6 +814,10 @@ export function useUpdateOrgConfig(options?: MutationHookOptions) {
         patch.pipeline_config = toStoredPipelineConfig(data.pipeline_config);
       }
 
+      if (data.platform_connections) {
+        patch.platform_connections = data.platform_connections;
+      }
+
       const { data: updated, error } = await supabase
         .from("org_config")
         .update(patch)
