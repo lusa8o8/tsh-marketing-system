@@ -287,7 +287,7 @@ async function processComment(
       await engineContext.supabase.from('human_inbox').insert({
         org_id: engineContext.context.orgId,
         item_type: 'suggestion',
-        priority: 'normal',
+        priority: 'fyi',
         payload: {
           platform: comment.platform,
           author: comment.author,

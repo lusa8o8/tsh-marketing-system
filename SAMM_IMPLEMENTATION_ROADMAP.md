@@ -239,6 +239,48 @@ Completed checkpoint:
 Commit policy:
 - one narrow stability commit before Milestone 6 or 7 implementation continues
 
+## Milestone 5B: Enable Real LLM Classification And Reply Generation In Pipeline A
+Status:
+- planned
+- boost suggestion FYI fix already applied (commit in this session)
+
+Goal:
+- replace the keyword-matching classifier and hardcoded reply templates in Pipeline A with real LLM calls
+- the scaffolding (Anthropic client, brand voice, agent registry) is already wired — the LLM is just explicitly discarded with `void anthropic` placeholders
+
+Known stubs to replace:
+- `classifyComment`: currently uses keyword matching only; `void anthropic` and `void brandVoice` discard the LLM and brand context entirely
+  - bug: spam/complaint keyword ordering — `'scam'` in a spam URL (e.g. `bit.ly/scam123`) triggers the complaint branch before the spam check runs
+  - fix: reorder checks (spam before complaint) AND replace with real LLM classification
+- `draftReply`: hardcoded template strings; `void anthropic` discards the LLM
+  - all complaints get the same "Hi [firstName], I'm really sorry..." string
+  - brand voice is ignored; `cta_preference` is only used in the routine template
+  - fix: replace with real LLM reply generation using brand voice
+
+What this does NOT fix:
+- real comment fetching from live platforms (Facebook, WhatsApp, YouTube APIs) — that is Milestone 10
+- Pipeline A will still process the same 7 mock comments until Milestone 10 live API integration
+- this milestone only ensures that when comments are processed, the AI is doing real classification and generating real brand-voice replies
+
+Scope:
+- enable the Anthropic call inside `classifyComment`
+- enable the Anthropic call inside `draftReply`
+- fix spam/complaint keyword ordering as part of the classifier rewrite
+- keep all routing logic (spam ignored, complaint escalated, boost suggested, routine replied) unchanged
+
+Verification:
+- spam comments are correctly ignored without generating a response
+- complaint escalations include a real LLM-drafted suggested response
+- boost replies reflect actual brand voice
+- routine replies are contextually relevant to the question asked
+
+Commit policy:
+- one stable commit after parity verification against the mock comment set
+
+Already fixed in this session (separate from full LLM enablement):
+- boost suggestion priority changed from `normal` to `fyi` so it shows "Mark read" instead of Approve/Reject
+- the reply is already written before the inbox item is created so there is nothing to approve
+
 ## Milestone 6: Add Resumable Human Gates For Pipeline B
 Status:
 - completed and verified through the real app flow

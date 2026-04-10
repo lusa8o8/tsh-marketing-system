@@ -43,7 +43,7 @@ Current product stance:
 - `samm` is the product anchor.
 - Hybrid control-plane model is the intended architecture.
 - Full `samm` workspace redesign is deferred until after user feedback.
-- Near-term UI changes, if any, should stay narrow and focus on Inbox and Content Registry, especially tab treatment.
+- Near-term UI changes, if any, should stay narrow and focus on Inbox and Content Registry.
 - Optional modules like `Calendar` and `Ambassadors` are planned for onboarding/capability gating later, not implemented yet.
 
 ## Key Completed Slices
@@ -64,6 +64,12 @@ Current product stance:
 - integration registry slice completed, committed, pushed, deployed, and parity-verified
 - Pipeline A rebuilt on the shared engine, committed, pushed, deployed, and parity-verified
 - Pipeline B and Pipeline C invocation baseline restored and pushed in the Milestone 5A checkpoint
+- Milestone 6: Pipeline B resumable human gate complete and browser-verified
+- Milestone 7: Pipeline C CEO brief gate complete and browser-verified
+- Milestone 7A: two-phase copy generation for Pipeline C complete and browser-verified
+- Milestone 7B: copy assets land in Content Registry as drafts, not in Inbox — complete and browser-verified
+- Milestone 7C: batch approval in Content Registry — planned, not yet implemented
+- Milestone 7D: marketer approval gate — planned, not yet implemented
 
 ### Architecture Docs
 Committed and pushed:
@@ -71,87 +77,84 @@ Committed and pushed:
 - `SAMM_SCHEDULER_CONTRACT.md`
 - `SAMM_CODEBASE_MAPPING.md`
 - `SAMM_IMPLEMENTATION_ROADMAP.md`
+- `SAMM_FULL_SYSTEM_ARCHITECTURE.md`
 
 ## Latest Important Commits
+- `82fea3f feat: content registry as approval surface for copy assets (Milestone 7B)`
+- `803b9b0 feat: two-phase copy generation for Pipeline C (Milestone 7A)`
+- `700a91c docs: mark Milestone 7 complete, add Milestone 7A two-phase copy generation`
 - `c3cd0af fix: fire-and-forget pipeline resume in coordinator-chat`
 - `a127214 fix: query waiting_human run directly in scheduler resume path`
-- `ae5138c fix: accept scheduler org_id for pipeline b and c`
-- `16119f9 docs: add pipeline b and c stability milestones`
 
-These are already pushed to `main`.
+All pushed to `main`.
 
 ## Current Status
-Stable through Milestone 7.
+Stable through Milestone 7B.
 
-Verified end-to-end in browser:
-- Pipeline C runs from `/samm` chat
-- campaign brief appears in Inbox with `waiting_human` in Operations
-- approval completes in under 5 seconds (fire-and-forget fix working)
-- Operations transitions `waiting_human` → `resumed` → `success` in real time without page refresh
-- draft approvals (6 copy assets) and campaign report land in Inbox after resume
+### Pipeline C end-to-end verified flow:
+1. `/samm` triggers Pipeline C → `running`
+2. Research phase (parallel) + campaign planner → campaign brief created
+3. Run pauses at `waiting_human` — campaign brief lands in Inbox
+4. CEO approves → approval completes in under 5 seconds (fire-and-forget)
+5. Background resume: canonical copy → 6 parallel platform assets → design brief suggestion → monitor → report
+6. 6 copy assets land in Content Registry as `draft` (not in Inbox)
+7. Design brief suggestion lands in Inbox as FYI
+8. Campaign report lands in Inbox
+9. Operations transitions `waiting_human` → `resumed` → `success` in real time
+
+### Approval surface boundary (established and stable):
+- **Inbox**: workflow decisions only — campaign brief, campaign report, escalations, suggestions, ambassador flags
+- **Content Registry**: content review only — all copy assets land here as `draft` for approval
+
+## Known Pipeline A Stubs (critical — must not be forgotten)
+Pipeline A classification and reply generation are NOT using the LLM. Both `classifyComment` and `draftReply` have `void anthropic` placeholders — Claude is explicitly discarded.
+
+Current state:
+- `classifyComment`: keyword matching only; no LLM call; brand voice ignored
+- `draftReply`: hardcoded template strings only; no LLM call; brand voice partially used in one template only
+- comment source: `getMockComments()` — 7 hardcoded mock comments, no live platform API reads
+- spam/complaint ordering bug: `'scam'` keyword check runs in the complaint branch BEFORE the spam check, so spam URLs containing the word `scam` (e.g. `bit.ly/scam123`) are incorrectly classified as complaints
+
+Milestone placement:
+- **Milestone 5B** (planned): enable real LLM classification and reply generation — does NOT require live APIs, can be done anytime
+- **Milestone 10**: real comment fetching from Facebook, WhatsApp, YouTube APIs
+
+Already fixed this session:
+- boost suggestion priority changed from `normal` to `fyi` — shows "Mark read" instead of Approve/Reject, since the reply is already written before the inbox item is created
 
 ## Exact Next Slice
-### Milestone 7A: Two-Phase Copy Generation For Pipeline C
+### Milestone 7C: Batch Approval In Content Registry
 
 ### Goal
-Replace the current 6 independent single-shot copy writer calls with a two-phase approach:
-- Phase 1: one canonical copy writer call that produces the verbatim source of truth (headline, core body, exact CTA, key fact)
-- Phase 2: 6 parallel platform adapter calls that each receive the canonical copy and tailor format/length/tone only
+Allow a marketer to approve all drafts from a single campaign run in one action alongside individual approve/reject.
 
-### Why
-- current 6 calls independently interpret the campaign brief — can produce divergent emphasis, urgency, and phrasing across platforms
-- two Facebook posts may not tell the same story; email CTA may differ from WhatsApp CTA
-- human reviewers are approving 6 assets that may not form one coherent campaign message
-- two-phase locks the message verbatim at the core and adapts only the wrapper
-- parallel phase 2 also cuts resume time significantly vs current sequential loop
+### Locked plan
+Backend changes to `pipeline-c-campaign/index.ts`:
+- add `campaign_name` and `pipeline_run_id` fields to each `content_registry` insert at asset creation time
 
-### Locked plan (verified against current code before edit)
+Frontend changes to `M.A.S UI/src/pages/content.tsx` and `M.A.S UI/src/lib/api.ts`:
+- group Drafts tab by `campaign_name` / `pipeline_run_id` when campaign assets are present
+- add "Approve all" button per campaign group that calls a new `useBatchApproveContent` mutation
+- `useBatchApproveContent` approves all `draft` rows matching the `pipeline_run_id`
+- individual Approve/Reject buttons remain unchanged on each card
+- non-campaign drafts (no `pipeline_run_id`) remain ungrouped
 
-Discovery confirmed:
-- `runCopyWriter` (line 556) runs 6 sequential LLM calls in a `for` loop
-- all 6 receive the same static inputs: `brief`, `event`, `brandVoice`
-- none read from each other's output — parallel-safe
-- called at line 337 inside `resumePipelineCRun` via `Promise.all([runCopyWriter(...), runDesignBriefAgent(...)])`
-
-Three changes to `pipeline-c-campaign/index.ts` only:
-
-1. Add `runCanonicalCopyWriter(anthropic, brief, event, brandVoice)`:
-   - one LLM call
-   - returns `{ headline: string, core_body: string, exact_cta: string, key_fact: string }`
-   - prompt instructs the model to distil the single source-of-truth message from the brief
-
-2. Update `runCopyWriter(anthropic, brief, event, brandVoice, canonical)`:
-   - add `canonical` parameter
-   - each platform adapter prompt locks `canonical.headline`, `canonical.exact_cta`, `canonical.key_fact` verbatim
-   - change `for` loop to `Promise.all(platforms.map(...))`
-
-3. Wire in `resumePipelineCRun`:
-   - call `runCanonicalCopyWriter` sequentially before the existing `Promise.all`
-   - pass canonical result into `runCopyWriter`
-
-No changes to scheduler, coordinator-chat, frontend, or Inbox flow.
-
-### Verification
-- all 6 copy assets share the same headline, CTA, and key fact verbatim
-- platform formatting still differs correctly per platform
-- draft approvals still land in Inbox
-- Operations run still reaches `success`
-
-## After Milestone 7A
-1. Add the second Pipeline C human gate for marketer approval of campaign assets.
-2. Add Pipeline C monitoring-loop and post-campaign resumability.
-3. Move to onboarding/capability-template work once the execution core is stable.
-4. Add usage metering and billing enforcement.
-5. Swap mocked adapters for live provider APIs only after the engine and gate boundaries are stable.
+### After 7C
+- Milestone 7D: marketer approval gate — rejection feeds back into pipeline resume / waiting_human
+- Milestone 8: onboarding and capability templates
+- Milestone 9: usage metering and billing enforcement
+- Milestone 10: live API swaps behind adapters (includes real comment fetching for Pipeline A)
+- Milestone 5B (can be done before 10): enable real LLM classification and reply generation in Pipeline A
 
 ## Relevant Files
 ### Frontend
-- `M.A.S UI/src/pages/agent/chat.tsx`
-- `M.A.S UI/src/lib/api.ts`
-- `M.A.S UI/src/lib/supabase.ts`
-- any Content review UI that approves or rejects drafts
+- `M.A.S UI/src/pages/content.tsx` — Content Registry UI, has Drafts tab with Approve/Reject
+- `M.A.S UI/src/pages/inbox.tsx` — Inbox UI
+- `M.A.S UI/src/lib/api.ts` — all mutations: useActionContent, useActionInboxItem, useBatchApproveContent (to be added)
+- `M.A.S UI/src/lib/supabase.ts` — ORG_ID constant
 
 ### Supabase
+- `supabase/functions/pipeline-a-engagement/index.ts` — Pipeline A; classifyComment and draftReply are stubbed
 - `supabase/functions/pipeline-b-weekly/index.ts`
 - `supabase/functions/pipeline-c-campaign/index.ts`
 - `supabase/functions/coordinator-chat/index.ts`
@@ -160,7 +163,6 @@ No changes to scheduler, coordinator-chat, frontend, or Inbox flow.
 - `supabase/functions/_shared/agent-registry.ts`
 - `supabase/functions/_shared/integration-registry.ts`
 - `supabase/functions/_shared/pipeline-run-status.ts`
-- `supabase/config.toml`
 
 ### Architecture Source Of Truth
 - `SAMM_RUNTIME_SPEC.md`
@@ -170,26 +172,23 @@ No changes to scheduler, coordinator-chat, frontend, or Inbox flow.
 - `SAMM_FULL_SYSTEM_ARCHITECTURE.md`
 
 ## Important Operational Notes
-- `ANTHROPIC_API_KEY` already exists in hosted Supabase Edge Function secrets.
-- browser parity for Milestone 4 was verified after running Pipeline A from `/samm`
-- engine-backed Pipeline A was deployed and matched the previous hosted parity baseline exactly
-- Milestone 5A is already complete and pushed
-- Milestone 6 is now verified through the real browser app flow for Pipeline B pause/resume
-- Milestone 7 is complete and browser-verified
-- the active next slice is Milestone 7A: two-phase copy generation for Pipeline C
-- Milestone 7 fixes: `a127214` (direct DB query for waiting_human run) and `c3cd0af` (fire-and-forget resume via EdgeRuntime.waitUntil)
-- the 54-second Pipeline C resume is handled by fire-and-forget; the run completes in the background after coordinator-chat returns
-- Milestone 6 follow-up fixes included removing unsupported `content_registry` column writes from the UI approval path and exposing `draft_approval` rows in Inbox
-- the schema slice for Milestone 6 exists in `supabase/migrations/20260409161000_pipeline_runs_status_states.sql` and was applied with `supabase db push`
-- the current local environment did not have `deno` installed, so local `deno check` was not available during parity verification
+- `ANTHROPIC_API_KEY` already exists in hosted Supabase Edge Function secrets
 - supabase CLI is at `C:/Users/Lusa/.scoop/shims/supabase.exe` (not in the bash PATH; use that path directly)
-- supabase CLI is at `C:/Users/Lusa/.scoop/shims/supabase.exe` (not in the bash PATH; use that path directly)
+- git is at `/c/Program\ Files/Git/cmd/git.exe` (not in bash PATH)
+- Python is at `/c/Python314/python.exe`
+- `cat`, `ls`, `head`, `grep`, `find` are not available in bash — use Read, Glob, Grep tools instead
+- local environment does not have `deno` installed — no local `deno check` available
+- the schema slice for Milestone 6 exists in `supabase/migrations/20260409161000_pipeline_runs_status_states.sql`
+- content_registry status lifecycle: `draft` → `scheduled` (on approval) or `rejected`; `published` is written directly by Pipeline B mock publisher
+- pipeline_runs status lifecycle: `running` → `waiting_human` → `resumed` → `success` / `failed` / `cancelled`
+- the 54-second Pipeline C resume runs in background via `EdgeRuntime.waitUntil` — coordinator-chat returns immediately
 
 ## Constraints To Preserve
 - Do not do a broad `samm` workspace redesign yet.
 - Do not widen scope into optional-module implementation yet.
 - Do not add external API work before the engine-backed execution core is stable.
 - Keep the product professional and restrained; avoid overdesigned UI changes.
+- Inbox = workflow decisions only. Content Registry = content review only. Do not blur this boundary.
 
 ## Last Known Good Principle
 The work has gone well because every slice followed:
