@@ -105,23 +105,37 @@ Replace the current 6 independent single-shot copy writer calls with a two-phase
 - two-phase locks the message verbatim at the core and adapts only the wrapper
 - parallel phase 2 also cuts resume time significantly vs current sequential loop
 
-### Required workflow
-1. Discovery:
-   - read current `runCopyWriter` in `pipeline-c-campaign/index.ts`
-   - confirm none of the 6 calls read from shared state or each other's output
-2. Plan:
-   - define the canonical copy writer prompt (JSON output: headline, core_body, exact_cta, key_fact)
-   - define how each platform adapter prompt receives and locks the canonical fields
-3. Edit:
-   - introduce `runCanonicalCopyWriter` as phase 1 in `resumePipelineCRun`
-   - rewrite `runCopyWriter` to accept canonical copy and run platform adapters in `Promise.all`
-   - update platform adapter prompts to use canonical fields verbatim
-4. Verify:
-   - all 6 copy assets share the same headline, CTA, and key fact
-   - platform formatting still differs correctly
-   - draft approvals still land in Inbox
-   - Operations run still reaches `success`
-5. Commit stable slice
+### Locked plan (verified against current code before edit)
+
+Discovery confirmed:
+- `runCopyWriter` (line 556) runs 6 sequential LLM calls in a `for` loop
+- all 6 receive the same static inputs: `brief`, `event`, `brandVoice`
+- none read from each other's output — parallel-safe
+- called at line 337 inside `resumePipelineCRun` via `Promise.all([runCopyWriter(...), runDesignBriefAgent(...)])`
+
+Three changes to `pipeline-c-campaign/index.ts` only:
+
+1. Add `runCanonicalCopyWriter(anthropic, brief, event, brandVoice)`:
+   - one LLM call
+   - returns `{ headline: string, core_body: string, exact_cta: string, key_fact: string }`
+   - prompt instructs the model to distil the single source-of-truth message from the brief
+
+2. Update `runCopyWriter(anthropic, brief, event, brandVoice, canonical)`:
+   - add `canonical` parameter
+   - each platform adapter prompt locks `canonical.headline`, `canonical.exact_cta`, `canonical.key_fact` verbatim
+   - change `for` loop to `Promise.all(platforms.map(...))`
+
+3. Wire in `resumePipelineCRun`:
+   - call `runCanonicalCopyWriter` sequentially before the existing `Promise.all`
+   - pass canonical result into `runCopyWriter`
+
+No changes to scheduler, coordinator-chat, frontend, or Inbox flow.
+
+### Verification
+- all 6 copy assets share the same headline, CTA, and key fact verbatim
+- platform formatting still differs correctly per platform
+- draft approvals still land in Inbox
+- Operations run still reaches `success`
 
 ## After Milestone 7A
 1. Add the second Pipeline C human gate for marketer approval of campaign assets.

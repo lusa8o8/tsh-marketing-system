@@ -8,6 +8,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import Anthropic from 'https://esm.sh/@anthropic-ai/sdk@0.27.0'
 import { getAgentDefinition } from '../_shared/agent-registry.ts'
 import { getIntegrationDefinition } from '../_shared/integration-registry.ts'
+import { PIPELINE_RUN_STATUS } from '../_shared/pipeline-run-status.ts'
 
 // ── types ─────────────────────────────────────────────────────────────
 interface CalendarEvent {
@@ -24,6 +25,21 @@ interface PipelineContext {
   orgId: string
   today: string
   calendarEvent?: CalendarEvent
+}
+
+interface PipelineCResults {
+  research_completed: boolean
+  campaign_brief_sent: boolean
+  campaign_name: string
+  copy_assets_created: number
+  design_brief_sent: boolean
+  posts_scheduled: number
+  monitor_check_run: boolean
+  report_generated: boolean
+  errors: string[]
+  campaign_brief_inbox_id?: string | null
+  campaign_brief?: CampaignBrief | null
+  calendar_event?: CalendarEvent | null
 }
 
 interface CampaignBrief {
@@ -88,9 +104,20 @@ Deno.serve(async (req) => {
     }
   }
 
+  const resumeRunId = typeof payload?.resume_run_id === 'string'
+    ? payload.resume_run_id
+    : typeof payload?.resumeRunId === 'string'
+      ? payload.resumeRunId
+      : null
+
   const config = await getOrgConfig(supabase, context.orgId)
 
-  const results = {
+  if (resumeRunId) {
+    return await resumePipelineCRun({ supabase, anthropic, context, config, runId: resumeRunId })
+  }
+
+  let runId: string | null = null
+  const results: PipelineCResults = {
     research_completed: false,
     campaign_brief_sent: false,
     campaign_name: '',
@@ -99,10 +126,15 @@ Deno.serve(async (req) => {
     posts_scheduled: 0,
     monitor_check_run: false,
     report_generated: false,
-    errors: [] as string[]
+    errors: [],
+    campaign_brief_inbox_id: null,
+    campaign_brief: null,
+    calendar_event: context.calendarEvent ?? null
   }
 
   try {
+    runId = await createPipelineCRun(supabase, context.orgId)
+
     const event = context.calendarEvent
     if (!event) {
       throw new Error('No calendar event provided — Pipeline C requires a trigger event')
@@ -151,7 +183,8 @@ Deno.serve(async (req) => {
             performance: perfResult.summary,
             competitor_insights: competitorResult.insights,
             ambassador_count: ambassadorResult.active_count
-          }
+          },
+          pipeline_run_id: runId
         },
         created_by_pipeline: 'pipeline-c-campaign',
         created_by_agent: getAgentDefinition('campaign_planner').id,
@@ -161,26 +194,152 @@ Deno.serve(async (req) => {
       .single()
 
     results.campaign_brief_sent = true
+    results.campaign_name = campaignBrief.name
+    results.campaign_brief = campaignBrief
+    results.campaign_brief_inbox_id = inboxRow?.id ?? null
     console.log(`Campaign brief sent to CEO inbox: "${campaignBrief.name}"`)
-    console.log('DEMO MODE: auto-approving campaign brief...')
 
-    if (inboxRow?.id) {
-      await supabase
-        .from('human_inbox')
-        .update({
-          status: 'approved',
-          actioned_by: 'demo-auto-approve',
-          actioned_at: new Date().toISOString(),
-          action_note: 'Auto-approved for demo purposes'
-        })
-        .eq('id', inboxRow.id)
+    await updatePipelineCRun(
+      supabase,
+      runId,
+      PIPELINE_RUN_STATUS.WAITING_HUMAN,
+      results
+    )
+
+    return new Response(
+      JSON.stringify({ ok: true, waiting_human: true, run_id: runId, ...results }),
+      { headers: { 'Content-Type': 'application/json' } }
+    )
+
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    results.errors.push(message)
+    await updatePipelineCRun(
+      supabase,
+      runId,
+      PIPELINE_RUN_STATUS.FAILED,
+      { ...results, error: message }
+    )
+    console.error('Pipeline C failed:', err)
+    return new Response(
+      JSON.stringify({ ok: false, error: message, run_id: runId, ...results }),
+      { status: 500, headers: { 'Content-Type': 'application/json' } }
+    )
+  }
+})
+
+// ── performance analyser ──────────────────────────────────────────────
+async function createPipelineCRun(supabase: any, orgId: string) {
+  const { data, error } = await supabase
+    .from('pipeline_runs')
+    .insert({
+      org_id: orgId,
+      pipeline: 'pipeline-c-campaign',
+      status: PIPELINE_RUN_STATUS.RUNNING,
+      started_at: new Date().toISOString(),
+    })
+    .select('id')
+    .single()
+
+  if (error) throw new Error(`Failed to create Pipeline C run: ${error.message}`)
+  return data?.id as string
+}
+
+async function loadPipelineCRun(supabase: any, orgId: string, runId: string) {
+  const { data, error } = await supabase
+    .from('pipeline_runs')
+    .select('*')
+    .eq('id', runId)
+    .eq('org_id', orgId)
+    .eq('pipeline', 'pipeline-c-campaign')
+    .single()
+
+  if (error) throw new Error(`Failed to load Pipeline C run: ${error.message}`)
+  return data
+}
+
+async function updatePipelineCRun(supabase: any, runId: string | null, status: string, result: Record<string, unknown>) {
+  if (!runId) return
+
+  const patch: Record<string, unknown> = { status, result }
+
+  if (status === PIPELINE_RUN_STATUS.SUCCESS || status === PIPELINE_RUN_STATUS.FAILED || status === PIPELINE_RUN_STATUS.CANCELLED) {
+    patch.finished_at = new Date().toISOString()
+  }
+
+  const { error } = await supabase
+    .from('pipeline_runs')
+    .update(patch)
+    .eq('id', runId)
+
+  if (error) throw new Error(`Failed to update Pipeline C run: ${error.message}`)
+}
+
+async function resumePipelineCRun(params: { supabase: any; anthropic: Anthropic; context: PipelineContext; config: any; runId: string }) {
+  const { supabase, anthropic, context, config, runId } = params
+  const run = await loadPipelineCRun(supabase, context.orgId, runId)
+
+  if (run.status === PIPELINE_RUN_STATUS.SUCCESS || run.status === PIPELINE_RUN_STATUS.CANCELLED) {
+    return new Response(JSON.stringify({ ok: true, already_final: true, run_id: runId, ...(run.result ?? {}) }), { headers: { 'Content-Type': 'application/json' } })
+  }
+
+  if (run.status !== PIPELINE_RUN_STATUS.WAITING_HUMAN && run.status !== PIPELINE_RUN_STATUS.RESUMED) {
+    return new Response(JSON.stringify({ ok: false, error: `Pipeline C run ${runId} is not resumable from status ${run.status}` }), { status: 409, headers: { 'Content-Type': 'application/json' } })
+  }
+
+  const stored = (run.result ?? {}) as Record<string, any>
+  const results: PipelineCResults = {
+    research_completed: stored.research_completed ?? false,
+    campaign_brief_sent: stored.campaign_brief_sent ?? false,
+    campaign_name: stored.campaign_name ?? '',
+    copy_assets_created: stored.copy_assets_created ?? 0,
+    design_brief_sent: stored.design_brief_sent ?? false,
+    posts_scheduled: stored.posts_scheduled ?? 0,
+    monitor_check_run: stored.monitor_check_run ?? false,
+    report_generated: stored.report_generated ?? false,
+    errors: Array.isArray(stored.errors) ? stored.errors : [],
+    campaign_brief_inbox_id: stored.campaign_brief_inbox_id ?? null,
+    campaign_brief: stored.campaign_brief ?? null,
+    calendar_event: stored.calendar_event ?? context.calendarEvent ?? null
+  }
+
+  await updatePipelineCRun(supabase, runId, PIPELINE_RUN_STATUS.RESUMED, results)
+
+  try {
+    const briefInboxId = results.campaign_brief_inbox_id
+    if (!briefInboxId) throw new Error('Pipeline C cannot resume without a stored campaign brief inbox id')
+
+    const { data: briefRow, error: briefError } = await supabase
+      .from('human_inbox')
+      .select('*')
+      .eq('id', briefInboxId)
+      .eq('org_id', context.orgId)
+      .single()
+
+    if (briefError) throw new Error(`Failed to load Pipeline C campaign brief approval: ${briefError.message}`)
+
+    if (briefRow.status === 'pending') {
+      await updatePipelineCRun(supabase, runId, PIPELINE_RUN_STATUS.WAITING_HUMAN, results)
+      return new Response(JSON.stringify({ ok: true, waiting_human: true, run_id: runId, ...results }), { headers: { 'Content-Type': 'application/json' } })
     }
 
-    // ── PARALLEL ASSET CREATION ───────────────────────────────────────
+    if (briefRow.status === 'rejected') {
+      await updatePipelineCRun(supabase, runId, PIPELINE_RUN_STATUS.CANCELLED, { ...results, error: 'Campaign brief was rejected' })
+      return new Response(JSON.stringify({ ok: true, cancelled: true, run_id: runId, ...results }), { headers: { 'Content-Type': 'application/json' } })
+    }
+
+    const campaignBrief = results.campaign_brief
+    const event = results.calendar_event
+    if (!campaignBrief || !event) throw new Error('Pipeline C resume is missing stored campaign brief or calendar event context')
+
+    console.log('Writing canonical campaign message...')
+    const canonicalCopy = await runCanonicalCopyWriter(anthropic, campaignBrief, event, config.brand_voice)
+    console.log(`Canonical message locked: "${canonicalCopy.headline}"`)
+
     console.log('Starting parallel asset creation...')
 
     const [copyAssets, designBrief] = await Promise.all([
-      runCopyWriter(anthropic, campaignBrief, event, config.brand_voice),
+      runCopyWriter(anthropic, campaignBrief, event, config.brand_voice, canonicalCopy),
       runDesignBriefAgent(anthropic, campaignBrief, event)
     ])
 
@@ -207,12 +366,15 @@ Deno.serve(async (req) => {
         item_type: 'draft_approval',
         priority: 'normal',
         payload: {
+          title: `${campaignBrief.name} — ${asset.platform}`,
+          preview: asset.body ? asset.body.slice(0, 120) : '',
           campaign_name: campaignBrief.name,
           platform: asset.platform,
           body: asset.body,
           subject_line: asset.subject_line,
           day_offset: asset.day_offset,
-          content_registry_id: regRow?.id
+          content_registry_id: regRow?.id,
+          pipeline_run_id: runId
         },
         created_by_pipeline: 'pipeline-c-campaign',
         created_by_agent: getAgentDefinition('copy_writer').id,
@@ -225,11 +387,7 @@ Deno.serve(async (req) => {
       org_id: context.orgId,
       item_type: 'suggestion',
       priority: 'normal',
-      payload: {
-        type: 'design_brief',
-        campaign_name: campaignBrief.name,
-        brief: designBrief
-      },
+      payload: { type: 'design_brief', campaign_name: campaignBrief.name, brief: designBrief },
       created_by_pipeline: 'pipeline-c-campaign',
       created_by_agent: getAgentDefinition('design_brief_agent').id
     })
@@ -238,7 +396,6 @@ Deno.serve(async (req) => {
     console.log(`${copyAssets.length} copy assets sent for approval`)
     console.log('Design brief sent to human inbox')
 
-    // ── DEMO: auto-approve and schedule ──────────────────────────────
     console.log('DEMO MODE: auto-approving copy assets...')
 
     const { data: pendingPosts } = await supabase
@@ -249,40 +406,30 @@ Deno.serve(async (req) => {
       .eq('is_campaign_post', true)
 
     for (const post of (pendingPosts ?? [])) {
-      await supabase
-        .from('content_registry')
-        .update({ status: 'scheduled' })
-        .eq('id', post.id)
+      await supabase.from('content_registry').update({ status: 'scheduled' }).eq('id', post.id)
       results.posts_scheduled++
     }
 
     console.log(`${results.posts_scheduled} campaign posts scheduled`)
 
-    // ── MONITOR ───────────────────────────────────────────────────────
     console.log('Running campaign monitor check...')
     await runMonitor(supabase, anthropic, context, campaignBrief, config.kpi_targets)
     results.monitor_check_run = true
 
-    // ── POST-CAMPAIGN REPORT ──────────────────────────────────────────
     console.log('Generating post-campaign report...')
     await runPostCampaignReport(supabase, anthropic, context, campaignBrief, results)
     results.report_generated = true
 
-    return new Response(
-      JSON.stringify({ ok: true, ...results }),
-      { headers: { 'Content-Type': 'application/json' } }
-    )
-
+    await updatePipelineCRun(supabase, runId, PIPELINE_RUN_STATUS.SUCCESS, results)
+    return new Response(JSON.stringify({ ok: true, resumed: true, run_id: runId, ...results }), { headers: { 'Content-Type': 'application/json' } })
   } catch (err) {
-    console.error('Pipeline C failed:', err)
-    return new Response(
-      JSON.stringify({ ok: false, error: err.message, ...results }),
-      { status: 500, headers: { 'Content-Type': 'application/json' } }
-    )
+    const message = err instanceof Error ? err.message : String(err)
+    results.errors.push(message)
+    await updatePipelineCRun(supabase, runId, PIPELINE_RUN_STATUS.FAILED, { ...results, error: message })
+    return new Response(JSON.stringify({ ok: false, error: message, run_id: runId, ...results }), { status: 500, headers: { 'Content-Type': 'application/json' } })
   }
-})
+}
 
-// ── performance analyser ──────────────────────────────────────────────
 async function runPerformanceAnalyser(
   supabase: any,
   anthropic: Anthropic,
@@ -411,74 +558,125 @@ Create the campaign brief.`
   return JSON.parse(extractJSON(raw))
 }
 
-// ── copy writer ───────────────────────────────────────────────────────
-async function runCopyWriter(
+// ── canonical copy writer ─────────────────────────────────────────────
+// Phase 1: produces the verbatim source-of-truth message for the campaign.
+// All platform adapters in phase 2 must use these fields exactly as written.
+async function runCanonicalCopyWriter(
   anthropic: Anthropic,
   brief: CampaignBrief,
   event: CalendarEvent,
   brandVoice: any
+): Promise<{ headline: string; core_body: string; exact_cta: string; key_fact: string }> {
+  const response = await anthropic.messages.create({
+    model: 'claude-sonnet-4-5',
+    max_tokens: 300,
+    system: `${buildSystemPrompt(brandVoice)}
+
+You are writing the canonical campaign message that will be adapted across all platforms.
+Distil the single most important message from the brief into its purest form.
+Respond with JSON only:
+{
+  "headline": "the hook or opening line to use verbatim across all platforms",
+  "core_body": "2-3 sentences that explain the offer and why it matters",
+  "exact_cta": "the exact call-to-action text to use verbatim on every platform",
+  "key_fact": "the single most important date, stat, or offer detail to include everywhere"
+}`,
+    messages: [{
+      role: 'user',
+      content: `Campaign: ${brief.name}
+Goal: ${brief.goal}
+Key message: ${brief.key_message}
+Call to action: ${brief.call_to_action}
+Target: ${event.universities.join(', ')} students
+Event date: ${event.event_date}
+Duration: ${brief.duration_days} days
+
+Write the canonical campaign message now.`
+    }]
+  })
+
+  const raw = response.content[0].type === 'text' ? response.content[0].text : '{}'
+  return JSON.parse(extractJSON(raw))
+}
+
+// ── copy writer ───────────────────────────────────────────────────────
+// Phase 2: adapts the canonical message for each platform in parallel.
+// Platform adapters may change format, length, and tone only.
+// headline, exact_cta, and key_fact must appear verbatim in every asset.
+async function runCopyWriter(
+  anthropic: Anthropic,
+  brief: CampaignBrief,
+  event: CalendarEvent,
+  brandVoice: any,
+  canonical: { headline: string; core_body: string; exact_cta: string; key_fact: string }
 ): Promise<any[]> {
 
   const platforms = [
-    { platform: getIntegrationDefinition('facebook').id, instruction: '2-3 sentences, engaging hook, emoji ok, end with StudyHub link' },
-    { platform: getIntegrationDefinition('facebook').id, instruction: 'different angle from first post, focus on social proof or urgency' },
+    { platform: getIntegrationDefinition('facebook').id, instruction: '2-3 sentences, emoji ok, end with StudyHub link' },
+    { platform: getIntegrationDefinition('facebook').id, instruction: 'focus on social proof or urgency — different framing from the first post, same core message' },
     { platform: getIntegrationDefinition('whatsapp').id, instruction: 'under 200 characters, conversational, one clear call to action' },
     { platform: getIntegrationDefinition('youtube').id, instruction: 'short community post, ask a question to drive comments' },
     { platform: getIntegrationDefinition('email').id, instruction: 'start first line with Subject: then write email body, warm and helpful' },
-    { platform: getIntegrationDefinition('whatsapp').id, instruction: 'ambassador talking points ? bullet list of what to say to classmates' },
+    { platform: getIntegrationDefinition('whatsapp').id, instruction: 'ambassador talking points — bullet list of what to say to classmates' },
   ]
 
-  const assets: any[] = []
+  const results = await Promise.all(
+    platforms.map(async (p, index) => {
+      try {
+        const response = await anthropic.messages.create({
+          model: 'claude-sonnet-4-5',
+          max_tokens: 200,
+          system: `${buildSystemPrompt(brandVoice)}
 
-  for (const p of platforms) {
-    try {
-      const response = await anthropic.messages.create({
-        model: 'claude-sonnet-4-5',
-        max_tokens: 200,
-        system: `${buildSystemPrompt(brandVoice)}
+Write ONLY the post copy — no JSON, no quotes around it, no preamble.
 
-Write ONLY the post copy — no JSON, no quotes around it, no preamble.`,
-        messages: [{
-          role: 'user',
-          content: `Campaign: ${brief.name}
-Key message: ${brief.key_message}
-Call to action: ${brief.call_to_action}
+You MUST include these campaign elements verbatim — do not paraphrase or reinterpret them:
+- Opening headline: "${canonical.headline}"
+- Call to action: "${canonical.exact_cta}"
+- Key fact: "${canonical.key_fact}"
+
+Adapt the surrounding format, length, and tone for the platform only.`,
+          messages: [{
+            role: 'user',
+            content: `Campaign: ${brief.name}
+Core message: ${canonical.core_body}
 Target: ${event.universities.join(', ')} students
 Event date: ${event.event_date}
 Platform: ${p.platform}
 Instructions: ${p.instruction}
 
 Write the copy now.`
-        }]
-      })
+          }]
+        })
 
-      const body = response.content[0].type === 'text'
-        ? response.content[0].text.trim()
-        : ''
+        const body = response.content[0].type === 'text'
+          ? response.content[0].text.trim()
+          : ''
 
-      let subject_line: string | undefined
-      let postBody = body
+        let subject_line: string | undefined
+        let postBody = body
 
-      if (p.platform === 'email' && body.startsWith('Subject:')) {
-        const lines = body.split('\n')
-        subject_line = lines[0].replace('Subject:', '').trim()
-        postBody = lines.slice(1).join('\n').trim()
+        if (p.platform === 'email' && body.startsWith('Subject:')) {
+          const lines = body.split('\n')
+          subject_line = lines[0].replace('Subject:', '').trim()
+          postBody = lines.slice(1).join('\n').trim()
+        }
+
+        return {
+          platform: p.platform,
+          day_offset: index,
+          body: postBody,
+          subject_line,
+          type: 'campaign'
+        }
+      } catch (err) {
+        console.error(`Copy writer failed for ${p.platform}:`, err instanceof Error ? err.message : String(err))
+        return null
       }
+    })
+  )
 
-      assets.push({
-        platform: p.platform,
-        day_offset: assets.length,
-        body: postBody,
-        subject_line,
-        type: 'campaign'
-      })
-
-    } catch (err) {
-      console.error(`Copy writer failed for ${p.platform}:`, err.message)
-    }
-  }
-
-  return assets
+  return results.filter((a): a is NonNullable<typeof a> => a !== null)
 }
 
 // ── design brief agent ────────────────────────────────────────────────
