@@ -108,7 +108,14 @@ export default function AgentSettings() {
             title: "Settings saved",
             description: "Configuration has been updated successfully.",
           });
-        }
+        },
+        onError: (err) => {
+          toast({
+            title: "Save failed",
+            description: (err as Error).message ?? "Could not save settings.",
+            variant: "destructive",
+          });
+        },
       }
     );
   };
