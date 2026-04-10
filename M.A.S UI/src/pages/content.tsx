@@ -430,7 +430,7 @@ function DesignBriefCard({
 
       {!isExpanded && (
         <div className="-mt-2 px-5 pb-4">
-          <p className="line-clamp-2 text-[13px] leading-relaxed text-muted-foreground">{item.body}</p>
+          <p className="line-clamp-2 text-[13px] leading-relaxed text-muted-foreground">{stripMarkdownToPreviewText(item.body)}</p>
         </div>
       )}
 
@@ -463,8 +463,8 @@ function DesignBriefCard({
         </div>
       )}
 
-      {isDraft && (
-        <div className={cn("flex items-center justify-end gap-2 px-5 pb-4", isExpanded && "border-t pt-3")} onClick={(e) => e.stopPropagation()}>
+      {isDraft && isExpanded && (
+        <div className="flex items-center justify-end gap-2 border-t px-5 pb-4 pt-3" onClick={(e) => e.stopPropagation()}>
           {!isEditing && (
             <>
               <Button size="sm" variant="ghost" className="h-7 text-xs text-muted-foreground" onClick={() => { setIsEditing(true); if (!isExpanded) onToggle(); }} disabled={actionPending}>
