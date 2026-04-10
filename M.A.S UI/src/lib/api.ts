@@ -945,6 +945,43 @@ export function useCreateCalendarEvent(options?: MutationHookOptions) {
   });
 }
 
+export function useUpdateCalendarEvent(options?: MutationHookOptions) {
+  return useMutation({
+    mutationFn: async ({
+      id,
+      data,
+    }: {
+      id: string;
+      data: Partial<{ event_type: string; event_date: string; label: string; universities: string[] }>;
+    }) => {
+      const { data: updated, error } = await supabase
+        .from("academic_calendar")
+        .update(data)
+        .eq("id", id)
+        .eq("org_id", getOrgId())
+        .select("*")
+        .single();
+      if (error) throw error;
+      return updated;
+    },
+    ...options?.mutation,
+  });
+}
+
+export function useDeleteCalendarEvent(options?: MutationHookOptions) {
+  return useMutation({
+    mutationFn: async ({ id }: { id: string }) => {
+      const { error } = await supabase
+        .from("academic_calendar")
+        .delete()
+        .eq("id", id)
+        .eq("org_id", getOrgId());
+      if (error) throw error;
+    },
+    ...options?.mutation,
+  });
+}
+
 export function useListMetrics(options?: QueryHookOptions) {
   return useQuery({
     queryKey: options?.query?.queryKey ?? ["platform-metrics", getOrgId()],

@@ -193,7 +193,21 @@ Deno.serve(async (req) => {
         latest_metrics: metrics,
       },
       conversation: [...history.slice(-8), { role: 'user', content: message }],
-      instruction: `You are samm, the coordinating intelligence for this workspace. Decide whether to answer directly or prepare a pipeline action. Return JSON only with this shape: {"message": string, "suggestions": string[], "action": null | {"type":"run_pipeline","pipeline":"pipeline-a-engagement"|"pipeline-b-weekly"|"pipeline-c-campaign"|"coordinator","needs_confirmation": boolean, "title": string, "description": string}}. Only propose pipeline actions when the user is clearly asking to run or trigger work. For status questions, summaries, metrics, approvals, and calendar questions, answer directly. Keep suggestions short and actionable.`
+      instruction: `You are samm, the coordinating intelligence for this workspace. Decide whether to answer directly or prepare an action. Return JSON only with this shape:
+{"message": string, "suggestions": string[], "action": null | ActionObject}
+
+ActionObject is one of:
+- {"type":"run_pipeline","pipeline":"pipeline-a-engagement"|"pipeline-b-weekly"|"pipeline-c-campaign"|"coordinator","needs_confirmation": boolean, "title": string, "description": string}
+- {"type":"create_calendar_event","label": string, "event_date": "YYYY-MM-DD", "event_type": "exam"|"registration"|"holiday"|"orientation"|"graduation"|"other", "universities": string[], "run_pipeline_c": boolean, "needs_confirmation": boolean, "title": string, "description": string}
+
+Rules:
+- Only propose run_pipeline when the user is clearly asking to run or trigger work.
+- Use create_calendar_event when the user asks to schedule, add, or create a calendar event.
+  - Infer the date from the user message (e.g. "next Friday" relative to today ${today}).
+  - Set run_pipeline_c to true only if the user also asks to draft or create content for that event.
+  - universities defaults to ["UNZA","CBU","MU","ZCAS","DMI"] if none are specified.
+- For status questions, summaries, metrics, approvals, and calendar reads, answer directly.
+- Keep suggestions short and actionable.`
     }
 
     const completion = await anthropic.messages.create({
@@ -220,6 +234,64 @@ Deno.serve(async (req) => {
       : DEFAULT_SUGGESTIONS
 
     const action = parsed.action && typeof parsed.action === 'object' ? parsed.action : null
+
+    if (action?.type === 'create_calendar_event') {
+      if (action.needs_confirmation && !confirmationAction) {
+        return jsonResponse({
+          message: parsed.message || action.description || `Create "${action.label}" on ${action.event_date}?`,
+          suggestions,
+          action,
+        })
+      }
+
+      if (confirmationAction === 'cancel') {
+        return jsonResponse({ message: 'Cancelled.', suggestions })
+      }
+
+      const calendarPayload = {
+        org_id: orgId,
+        label: action.label,
+        event_date: action.event_date,
+        event_type: action.event_type ?? 'other',
+        universities: action.universities ?? [],
+        triggered: false,
+        lead_days: 21,
+        pipeline_trigger: 'pipeline_c',
+      }
+
+      const { error: calInsertError } = await supabase
+        .from('academic_calendar')
+        .insert(calendarPayload)
+
+      if (calInsertError) {
+        return jsonResponse({ error: `Failed to create calendar event: ${calInsertError.message}` }, 500)
+      }
+
+      if (action.run_pipeline_c) {
+        const pipelineAction = {
+          type: 'run_pipeline',
+          pipeline: 'pipeline-c-campaign',
+          needs_confirmation: false,
+          title: `Campaign for ${action.label}`,
+          description: `Triggered by calendar event creation.`,
+        }
+        const pipelineResult = await resolveModelPipelineAction({
+          supabase,
+          orgId,
+          runs: activeRuns,
+          action: pipelineAction,
+          fallbackMessage: `Added "${action.label}" to the calendar and queued a campaign run.`,
+          suggestions,
+        })
+        if (pipelineResult) return jsonResponse(pipelineResult)
+      }
+
+      return jsonResponse({
+        message: `Added "${action.label}" on ${action.event_date} to the calendar.`,
+        suggestions,
+      })
+    }
+
     const modelSchedulerResult = await resolveModelPipelineAction({
       supabase,
       orgId,
