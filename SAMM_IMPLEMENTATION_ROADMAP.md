@@ -846,8 +846,7 @@ Scope:
 
 ## Milestone 11E: Brand Visual Kit + Design Brief Injection
 Status:
-- design locked 2026-04-11 (see PIPELINE_C_DESIGN.md — Brand Consistency section)
-- independent of M11A/B/C/D
+- complete 2026-04-11
 - must ship before M13 (Live Platform Publishing) — brand inconsistency in published content is a public problem
 
 Goal:
