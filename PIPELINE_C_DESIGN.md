@@ -358,10 +358,126 @@ A lightweight content request pipeline ("Pipeline D" or "Pipeline C Lite") that:
 | 5 | Label competitor researcher as simulated | M11C | None |
 | 6 | Register canonical_copy_writer in agent registry | M11C | None |
 | 7 | event_end_date migration + Calendar UI field | M11D | None |
+| 8 | Brand visual kit + design brief injection | M11E | None (independent) |
 
-M11A and M11B ship together as the core event-context slice. M11C is a polish pass on honesty/accuracy. M11D is a data model extension.
+M11A and M11B ship together as the core event-context slice. M11C is a polish pass on honesty/accuracy. M11D and M11E are independent data model + injection changes.
 
 **Do not start M11A implementation until this doc is committed and the design is reviewed.**
+
+---
+
+## Brand Consistency — Design Brief Injection (M11E)
+
+### The problem
+
+`runDesignBriefAgent` currently receives only `campaign_brief` and `calendar_event`. It has no access to visual brand identity. When the output is pasted into Canva AI or any design tool, the AI hallucinates colors, typography, logo treatment, and visual style on every run. Output quality varies; brand identity is not reproducible.
+
+`org_config` has `brand_voice` (text/tone/CTA) but no equivalent visual layer.
+
+### What Canva AI hallucinates without brand context
+
+| Missing | Hallucination |
+|---|---|
+| Primary/secondary hex colors | Invents a plausible EdTech palette each run |
+| Typography | Picks whatever looks "modern" |
+| Logo spec | Renders no logo or a generic placeholder |
+| Visual style direction | Alternates between flat, photo, gradient per run |
+| Photography guidance | Uses stock-look imagery |
+| Layout preference | Varies per run |
+| Platform dimensions | Ignores crop-safety zones |
+| CTA visual treatment | Inconsistent button shape and color |
+
+### What gets added to `org_config`
+
+**`brand_visual` JSONB column:**
+```json
+{
+  "primary_color": "#hex",
+  "secondary_color": "#hex",
+  "accent_color": "#hex",
+  "background_color": "#hex",
+  "font_heading": "font name",
+  "font_body": "font name",
+  "logo_usage_rules": "placement, minimum size, clear space, approved backgrounds",
+  "visual_style": "flat/photo/illustration, density, whitespace policy",
+  "photography_style": "real students, natural light, no stock photos",
+  "layout_preference": "mobile-first, key info above fold"
+}
+```
+
+**`markdown_design_spec` text column:**
+Freeform markdown field. Written once by the brand manager. Injected verbatim at the end of every design brief. Handles rules that no form field can capture ("never place text over the student's face", "always include a TSH watermark bottom-right"). Future: a marketplace of brand spec templates that orgs can share or purchase.
+
+**Additions to existing `brand_voice` JSONB:**
+- `hashtags`: string[] — approved hashtag list (max 6). Model must pick from this list. Never invents.
+- `post_format_preference`: string — e.g. "short punchy sentences, max 3 per post, prose not bullets"
+- `emoji_policy`: string — which emoji are approved, how many per post, placement rules
+
+### `academic_calendar.creative_override_allowed`
+
+New boolean column (default: false).
+
+Controls whether design brief agent relaxes brand constraints for the event:
+- `exam`, `registration` → always false, no override permitted
+- `graduation`, `holiday`, `orientation`, `other` → settable per event (toggle in Calendar UI Add/Edit form)
+
+When true, the design brief includes: _"Creative deviation permitted for this event type. Primary palette may be adapted within the [accent_color] family. Typography and logo rules remain strict."_
+
+When false (default): all brand constraints applied verbatim. No exceptions.
+
+### Design brief agent prompt shape (after M11E)
+
+```
+BRAND VISUAL IDENTITY
+Primary color: #hex
+Secondary color: #hex
+Accent color: #hex
+Background: #hex
+Heading font: [font]
+Body font: [font]
+Logo rules: [logo_usage_rules]
+Visual style: [visual_style]
+Photography: [photography_style]
+Layout: [layout_preference]
+
+PLATFORM DIMENSIONS (use exact dimensions for each deliverable)
+Facebook post: 1200×628 (landscape) or 1080×1080 (square)
+WhatsApp image: 800×800 or 1080×1920 (status)
+YouTube community: 1080×1080
+Email header: 600×200
+
+CREATIVE FREEDOM
+[if creative_override_allowed] Creative palette deviation permitted within accent color family. All other rules apply.
+[if not] Full brand lock. No palette, typography, or style deviation.
+
+BRAND SPEC (verbatim, written by brand manager)
+[markdown_design_spec if present]
+
+CAMPAIGN CONTEXT
+[campaign brief fields as now]
+```
+
+### What is deferred (M-vision milestone)
+
+- **Logo file upload** — Supabase Storage + multimodal extraction of colors and placement rules from the logo file itself
+- **Visual reference image uploads** — upload 3-5 reference posts → model codifies the visual pattern
+- **Canva API integration** — Approve button on design brief card → Canva API with brand kit pre-loaded (brand_visual object maps directly to Canva brand kit structure)
+- **Markdown design spec marketplace** — community-shared brand spec templates; orgs import and customise
+
+The text-based `brand_visual` + `markdown_design_spec` approach is the deliberate bridge: it eliminates hallucination now, and the structured JSON maps cleanly to the Canva API call later without a schema rework.
+
+### What boring consistency looks like in practice
+
+Every design brief produced by Pipeline C (and eventually Pipeline D) will contain:
+- Exact hex values — no guessing
+- Font names — no guessing
+- Logo placement rules — explicit
+- Photography rules — explicit
+- Platform dimensions — exact
+- Hashtag list — fixed, not invented
+- Creative override flag — deliberate, not accidental
+
+A designer or Canva AI receiving this brief has no room to improvise on brand identity. They can only improvise on creativity within those constraints. That is the target state.
 
 ---
 

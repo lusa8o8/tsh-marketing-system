@@ -201,18 +201,20 @@ These NL patterns are handled by `coordinator-chat/scheduler.ts` and have not al
 - **M11B**: Pipeline C — Duration Constraint + Post Scheduling Fix (depends on M11A)
 - **M11C**: Pipeline C — Monitor reframe, competitor label, canonical_copy_writer registry entry (independent)
 - **M11D**: Pipeline C — event_end_date schema extension (independent)
+- **M11E**: Brand Visual Kit — brand_visual in org_config, markdown_design_spec, creative_override_allowed, design brief injection, hashtag/format/emoji fields in brand_voice (must ship before M13)
 - **M12**: One-Off Post Pipeline (Pipeline D) — ad-hoc single post, no brief/CEO gate
 - **M13**: Live Platform Publishing — real Facebook/WhatsApp/YouTube/email API calls
 - **M14**: Multi-Channel samm Access (Slack, Teams, WhatsApp, Telegram, email inbound)
 - **M15**: Voice Interface
 - **M16**: Dashless Operation (Google Sheets, Docs, Excel)
+- **M-vision**: Logo file upload + multimodal palette extraction, visual reference uploads, Canva API integration, markdown design spec marketplace
 
 ### Deferred
 - **M8B**: Onboarding Flow UI (4-5 screen wizard)
 - **M9**: Copy Quality Check (Pipeline C phase 3 critic pass)
 
 ### Architecture Design Docs
-- `PIPELINE_C_DESIGN.md` — full Pipeline C agent inventory, 7 design problems, event context pass-through design, one-off post gap, implementation order. **Read before any Pipeline C code changes.**
+- `PIPELINE_C_DESIGN.md` — full Pipeline C agent inventory, 7 design problems + fixes, event context pass-through design, brand consistency spec (M11E), one-off post gap, implementation order. **Read before any Pipeline C code changes.**
 
 ---
 

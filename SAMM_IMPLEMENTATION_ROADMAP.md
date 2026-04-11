@@ -840,6 +840,105 @@ Scope:
 
 ---
 
+## Milestone 11E: Brand Visual Kit + Design Brief Injection
+Status:
+- design locked 2026-04-11 (see PIPELINE_C_DESIGN.md — Brand Consistency section)
+- independent of M11A/B/C/D
+- must ship before M13 (Live Platform Publishing) — brand inconsistency in published content is a public problem
+
+Goal:
+- design briefs contain enough structured visual context that Canva AI (or any design tool) produces brand-consistent output without hallucinating colors, typography, or visual style
+- `org_config` gains a `brand_visual` layer equivalent in completeness to the existing `brand_voice` layer
+- seasonal/event creative overrides are deliberate and flagged, not accidental
+
+Why now and not later:
+- design briefs are already being used in Canva AI (verified by user 2026-04-11)
+- Canva AI hallucinates palette, typography, and logo placement on every run because no visual context is injected
+- every run until this ships deepens the inconsistency habit
+- the fix is text-only (no vision, no file uploads) — small scope, high impact
+
+Scope:
+
+**1. `org_config` schema extension (migration)**
+Add `brand_visual` JSONB column with this structure:
+```json
+{
+  "primary_color": "#hex",
+  "secondary_color": "#hex",
+  "accent_color": "#hex",
+  "background_color": "#hex",
+  "font_heading": "font name",
+  "font_body": "font name",
+  "logo_usage_rules": "text — placement, min size, clear space, approved backgrounds",
+  "visual_style": "text — flat/photo/illustration, density, whitespace policy",
+  "photography_style": "text — real students, natural light, no stock, etc.",
+  "layout_preference": "text — mobile-first, key info above fold, etc."
+}
+```
+Add `hashtags` array (approved hashtag list, max 6) and `post_format_preference` string to existing `brand_voice` JSONB.
+Add `markdown_design_spec` text column (freeform, injected verbatim into every design brief).
+
+**2. `academic_calendar` schema extension (migration)**
+Add `creative_override_allowed` boolean column (default false).
+When true, design brief agent relaxes brand constraints with an explicit note.
+
+**3. Settings UI — Visual Brand tab**
+New tab in Settings alongside Brand Voice:
+- Color pickers / hex inputs for primary, secondary, accent, background
+- Font name inputs (heading + body)
+- Textarea: Logo usage rules
+- Textarea: Visual style direction
+- Textarea: Photography style
+- Textarea: Layout preferences
+- Textarea: Markdown design spec (freeform — injected verbatim)
+- Tag input: Approved hashtags
+
+Add to existing Brand Voice form:
+- Select: Post format preference (short/medium/long, bullets/prose)
+- Textarea: Emoji policy (which, how many, where — not just "ok/not ok")
+
+**4. Calendar UI — creative override toggle**
+Add "Allow creative deviation" toggle to the Add/Edit event form.
+Visible only on event types where override is relevant (holiday, graduation, other).
+exam and registration types lock to false — no override.
+
+**5. `runDesignBriefAgent` — inject brand visual context**
+Update system prompt and user message to include:
+- Full `brand_visual` object
+- `markdown_design_spec` if present (injected verbatim after structured fields)
+- Platform dimension specs (static, from integration registry)
+- `creative_override_allowed` flag — if true, prompt permits palette deviation within accent color family
+
+**6. `brand_voice` prompts — inject new fields**
+Update `buildSystemPrompt` to include hashtag list and post format preference.
+Update `runCanonicalCopyWriter` and `runCopyWriter` to receive and apply these constraints.
+
+Platform dimension reference (static, baked into design brief prompt):
+- Facebook post: 1200×628 or 1080×1080
+- WhatsApp image: 800×800 or 1080×1920 status
+- YouTube community: 1080×1080
+- Email header: 600×200
+
+Do not include:
+- Logo file uploads (requires vision — deferred to M-vision)
+- Visual reference image uploads (deferred)
+- Canva API integration (deferred)
+- Markdown design spec marketplace/community (deferred)
+
+Verification:
+- Design brief in Content Registry includes hex colors, font names, logo usage rules, and platform dimensions
+- Design brief for a `creative_override_allowed` event includes explicit note permitting palette deviation
+- Design brief for an exam event contains no creative override note and full brand constraints
+- Settings UI saves brand_visual fields and they persist on reload
+- Hashtags in brand_voice appear in copy assets (not hallucinated)
+
+Commit policy:
+- migration first (committed before UI or prompt changes)
+- one stable commit after Settings UI is verified saving/loading correctly
+- one stable commit after design brief injection is verified end-to-end
+
+---
+
 ## Milestone 12: One-Off Post Pipeline (Pipeline D)
 Status:
 - design locked 2026-04-11 (see PIPELINE_C_DESIGN.md — One-Off Post Gap section)
