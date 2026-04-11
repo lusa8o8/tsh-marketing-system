@@ -37,7 +37,22 @@ type OrgConfig = {
     preferred_cta: string;
     good_post_example: string;
     bad_post_example: string;
+    hashtags: string[];
+    post_format_preference: string;
   };
+  brand_visual: {
+    primary_color: string;
+    secondary_color: string;
+    accent_color: string;
+    background_color: string;
+    font_heading: string;
+    font_body: string;
+    logo_usage_rules: string;
+    visual_style: string;
+    photography_style: string;
+    layout_preference: string;
+  };
+  markdown_design_spec: string;
   platform_connections: Record<string, unknown>;
   pipeline_config: {
     pipeline_a_enabled: boolean;
@@ -279,7 +294,22 @@ function normalizeOrgConfig(row: any): OrgConfig {
       preferred_cta: brandVoice.preferred_cta ?? brandVoice.cta_preference ?? "",
       good_post_example: brandVoice.good_post_example ?? brandVoice.example_good_post ?? "",
       bad_post_example: brandVoice.bad_post_example ?? brandVoice.example_bad_post ?? "",
+      hashtags: brandVoice.hashtags ?? [],
+      post_format_preference: brandVoice.post_format_preference ?? "",
     },
+    brand_visual: {
+      primary_color: row?.brand_visual?.primary_color ?? "",
+      secondary_color: row?.brand_visual?.secondary_color ?? "",
+      accent_color: row?.brand_visual?.accent_color ?? "",
+      background_color: row?.brand_visual?.background_color ?? "",
+      font_heading: row?.brand_visual?.font_heading ?? "",
+      font_body: row?.brand_visual?.font_body ?? "",
+      logo_usage_rules: row?.brand_visual?.logo_usage_rules ?? "",
+      visual_style: row?.brand_visual?.visual_style ?? "",
+      photography_style: row?.brand_visual?.photography_style ?? "",
+      layout_preference: row?.brand_visual?.layout_preference ?? "",
+    },
+    markdown_design_spec: row?.markdown_design_spec ?? "",
     platform_connections: row?.platform_connections ?? {},
     pipeline_config: {
       pipeline_a_enabled: pipelineConfig.pipeline_a_enabled ?? pipelineConfig.pipeline_a?.enabled ?? false,
@@ -326,6 +356,8 @@ function toStoredBrandVoice(brandVoice: OrgConfig["brand_voice"], current?: any)
     example_good_post: brandVoice.good_post_example,
     bad_post_example: brandVoice.bad_post_example,
     example_bad_post: brandVoice.bad_post_example,
+    hashtags: brandVoice.hashtags ?? [],
+    post_format_preference: brandVoice.post_format_preference ?? "",
   };
 }
 
@@ -832,6 +864,14 @@ export function useUpdateOrgConfig(options?: MutationHookOptions) {
         patch.platform_connections = data.platform_connections;
       }
 
+      if (data.brand_visual !== undefined) {
+        patch.brand_visual = data.brand_visual;
+      }
+
+      if (data.markdown_design_spec !== undefined) {
+        patch.markdown_design_spec = data.markdown_design_spec;
+      }
+
       const { data: updated, error } = await supabase
         .from("org_config")
         .update(patch)
@@ -936,11 +976,12 @@ export function useCreateCalendarEvent(options?: MutationHookOptions) {
     mutationFn: async ({
       data,
     }: {
-      data: { event_type: string; event_date: string; event_end_date?: string | null; label: string; universities: string[] };
+      data: { event_type: string; event_date: string; event_end_date?: string | null; label: string; universities: string[]; creative_override_allowed?: boolean };
     }) => {
       const payload = {
         ...data,
         event_end_date: data.event_end_date || null,
+        creative_override_allowed: data.creative_override_allowed ?? false,
         org_id: getOrgId(),
         triggered: false,
         lead_days: 21,
@@ -967,7 +1008,7 @@ export function useUpdateCalendarEvent(options?: MutationHookOptions) {
       data,
     }: {
       id: string;
-      data: Partial<{ event_type: string; event_date: string; event_end_date?: string | null; label: string; universities: string[] }>;
+      data: Partial<{ event_type: string; event_date: string; event_end_date?: string | null; label: string; universities: string[]; creative_override_allowed?: boolean }>;
     }) => {
       const { data: updated, error } = await supabase
         .from("academic_calendar")

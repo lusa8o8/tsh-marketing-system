@@ -19,6 +19,7 @@ interface CalendarEvent {
   label: string
   universities: string[]
   lead_days: number
+  creative_override_allowed: boolean
 }
 
 interface PipelineContext {
@@ -68,6 +69,13 @@ async function getOrgConfig(supabase: any, orgId: string) {
 
 // ── brand voice prompt builder ────────────────────────────────────────
 function buildSystemPrompt(brandVoice: any): string {
+  const hashtagLine = Array.isArray(brandVoice.hashtags) && brandVoice.hashtags.length > 0
+    ? `\nApproved hashtags (use only these — do not invent others): ${brandVoice.hashtags.join(' ')}`
+    : ''
+  const formatLine = brandVoice.post_format_preference
+    ? `\nPost format preference: ${brandVoice.post_format_preference}`
+    : ''
+
   return `You are the social media voice for ${brandVoice.full_name} (${brandVoice.name}).
 ${brandVoice.full_name} helps Zambian university students pass exams through YouTube tutorials and past papers.
 Target audience: ${brandVoice.target_audience}
@@ -76,7 +84,7 @@ Always: ${brandVoice.always_say.join(', ')}
 Never: ${brandVoice.never_say.join(', ')}
 Preferred CTA: ${brandVoice.cta_preference}
 Good post example: "${brandVoice.example_good_post}"
-Bad post example: "${brandVoice.example_bad_post}"`
+Bad post example: "${brandVoice.example_bad_post}"${hashtagLine}${formatLine}`
 }
 
 // ── main handler ──────────────────────────────────────────────────────
@@ -409,7 +417,7 @@ async function resumePipelineCRun(params: { supabase: any; anthropic: Anthropic;
 
     const [copyAssets, designBrief] = await Promise.all([
       runCopyWriter(anthropic, campaignBrief, event, config.brand_voice, canonicalCopy),
-      runDesignBriefAgent(anthropic, campaignBrief, event)
+      runDesignBriefAgent(anthropic, campaignBrief, event, config.brand_visual ?? {}, config.markdown_design_spec ?? null)
     ])
 
     results.copy_assets_created = copyAssets.length
@@ -728,23 +736,63 @@ Write the copy now.`
 }
 
 // ── design brief agent ────────────────────────────────────────────────
+// Injects structured brand_visual context so designers / Canva AI cannot
+// hallucinate palette, fonts, or layout. creative_override_allowed loosens
+// palette constraints for celebratory event types only.
 async function runDesignBriefAgent(
   anthropic: Anthropic,
   brief: CampaignBrief,
-  event: CalendarEvent
+  event: CalendarEvent,
+  brandVisual: any,
+  markdownDesignSpec: string | null
 ): Promise<string> {
+
+  const hasVisual = brandVisual && Object.keys(brandVisual).some(k => brandVisual[k])
+
+  const brandVisualBlock = hasVisual
+    ? `\nBRAND VISUAL IDENTITY
+Primary color: ${brandVisual.primary_color || 'not set'}
+Secondary color: ${brandVisual.secondary_color || 'not set'}
+Accent color: ${brandVisual.accent_color || 'not set'}
+Background: ${brandVisual.background_color || 'not set'}
+Heading font: ${brandVisual.font_heading || 'not set'}
+Body font: ${brandVisual.font_body || 'not set'}
+Logo rules: ${brandVisual.logo_usage_rules || 'not specified'}
+Visual style: ${brandVisual.visual_style || 'not specified'}
+Photography: ${brandVisual.photography_style || 'not specified'}
+Layout: ${brandVisual.layout_preference || 'not specified'}`
+    : ''
+
+  const platformDimensionsBlock = `\nPLATFORM DIMENSIONS (use exact dimensions for each deliverable)
+- Facebook post: 1200×628 (landscape) or 1080×1080 (square)
+- WhatsApp image: 800×800 or 1080×1920 (status)
+- YouTube community: 1080×1080
+- Email header: 600×200`
+
+  const creativeBlock = event.creative_override_allowed
+    ? '\nCREATIVE FREEDOM: Palette deviation permitted within the accent color family. All other brand rules apply.'
+    : '\nCREATIVE FREEDOM: Full brand lock. No palette, typography, or style deviation permitted.'
+
+  const designSpecBlock = markdownDesignSpec
+    ? `\nBRAND SPEC (written by brand manager — apply exactly)\n${markdownDesignSpec}`
+    : ''
 
   const response = await anthropic.messages.create({
     model: 'claude-sonnet-4-5',
-    max_tokens: 300,
-    system: `Write a concise design brief for a student-focused EdTech campaign flyer.
-Plain text only. No markdown, no asterisks, no bold, no headers. Use plain bullet points with a dash (-). Under 150 words.`,
+    max_tokens: 400,
+    system: `Write a concise design brief for a student-focused EdTech campaign asset.
+Plain text only. No markdown, no asterisks, no bold, no headers. Use plain bullet points with a dash (-). Under 200 words.
+You MUST include the exact brand colors, font names, logo rules, and platform dimensions as specified. Do not substitute or invent values.`,
     messages: [{
       role: 'user',
       content: `Campaign: ${brief.name}
 Key message: ${brief.key_message}
 Platforms: ${brief.platforms.join(', ')}
 Target: ${brief.target_audience} at ${event.universities.join(', ')}
+${brandVisualBlock}
+${platformDimensionsBlock}
+${creativeBlock}
+${designSpecBlock}
 
 Write the design brief for the graphic designer.`
     }]
@@ -887,7 +935,7 @@ Current platform metrics: ${JSON.stringify(metrics?.slice(0, 4))}`
 async function getNextCalendarEvent(supabase: any, orgId: string, today: string): Promise<CalendarEvent> {
   const { data, error } = await supabase
     .from('academic_calendar')
-    .select('id, event_type, event_date, event_end_date, label, universities, lead_days')
+    .select('id, event_type, event_date, event_end_date, label, universities, lead_days, creative_override_allowed')
     .eq('org_id', orgId)
     .gte('event_date', today)
     .order('event_date', { ascending: true })

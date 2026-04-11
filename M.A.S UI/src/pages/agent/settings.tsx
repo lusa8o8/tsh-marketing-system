@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useGetOrgConfig, useUpdateOrgConfig, useTriggerPipeline, getGetOrgConfigQueryKey } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
-import { Save, Building, MessageSquare, Share2, GitBranch, Target, Check, AlertCircle, Play } from "lucide-react";
+import { Save, Building, MessageSquare, Share2, GitBranch, Target, Check, AlertCircle, Play, Palette } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -36,6 +36,7 @@ export default function AgentSettings() {
 
   const [orgData, setOrgData] = useState<any>({});
   const [brandData, setBrandData] = useState<any>({});
+  const [visualData, setVisualData] = useState<any>({});
   const [kpiData, setKpiData] = useState<any>({});
   const [pipelineData, setPipelineData] = useState<any>({});
 
@@ -51,6 +52,10 @@ export default function AgentSettings() {
         contact_email: config.contact_email
       });
       setBrandData(config.brand_voice);
+      setVisualData({
+        ...(config.brand_visual ?? {}),
+        markdown_design_spec: config.markdown_design_spec ?? "",
+      });
       setKpiData(config.kpi_targets);
       setPipelineData(config.pipeline_config);
       initialized.current = true;
@@ -115,6 +120,22 @@ export default function AgentSettings() {
             description: (err as Error).message ?? "Could not save settings.",
             variant: "destructive",
           });
+        },
+      }
+    );
+  };
+
+  const handleSaveVisualBrand = () => {
+    const { markdown_design_spec, ...brandVisualFields } = visualData;
+    updateMutation.mutate(
+      { data: { brand_visual: brandVisualFields, markdown_design_spec: markdown_design_spec ?? "" } },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: getGetOrgConfigQueryKey() });
+          toast({ title: "Settings saved", description: "Visual brand updated successfully." });
+        },
+        onError: (err) => {
+          toast({ title: "Save failed", description: (err as Error).message ?? "Could not save visual brand.", variant: "destructive" });
         },
       }
     );
@@ -257,10 +278,124 @@ export default function AgentSettings() {
                       <Textarea value={brandData.bad_post_example} onChange={(e) => setBrandData({ ...brandData, bad_post_example: e.target.value })} className="h-32 resize-none border-l-4 border-l-red-500 bg-red-50/30 text-sm" />
                     </div>
                   </div>
+
+                  <div className="mt-4 grid grid-cols-1 gap-5 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label className="text-xs">Approved Hashtags <span className="text-muted-foreground">(max 6)</span></Label>
+                      <TagInput value={brandData.hashtags || []} onChange={(v) => setBrandData({ ...brandData, hashtags: v.slice(0, 6) })} />
+                      <p className="text-[11px] text-muted-foreground">Used verbatim in copy — the AI will not invent hashtags outside this list.</p>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs">Post Format Preference</Label>
+                      <select
+                        className="h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
+                        value={brandData.post_format_preference || ""}
+                        onChange={(e) => setBrandData({ ...brandData, post_format_preference: e.target.value })}
+                      >
+                        <option value="">Not specified</option>
+                        <option value="short-prose">Short prose (1–2 sentences)</option>
+                        <option value="medium-prose">Medium prose (2–4 sentences)</option>
+                        <option value="long-prose">Long prose (5+ sentences)</option>
+                        <option value="bullets">Bullet points</option>
+                        <option value="short-bullets">Short with bullets</option>
+                      </select>
+                      <p className="text-[11px] text-muted-foreground">Guides the copy writer's default formatting across all platforms.</p>
+                    </div>
+                  </div>
                 </div>
                 <div className="mt-6 flex justify-end">
                   <Button size="sm" onClick={() => handleSave("brand_voice", brandData)} disabled={updateMutation.isPending}>
                     <Save className="mr-2 h-4 w-4" /> Save Brand Voice
+                  </Button>
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+
+            <AccordionItem value="item-2b" className="overflow-hidden rounded-lg border bg-card px-2 shadow-sm">
+              <AccordionTrigger className="px-4 py-5 hover:no-underline">
+                <div className="flex items-center gap-3">
+                  <div className="rounded-md bg-muted p-2 text-foreground/70"><Palette className="h-4 w-4" /></div>
+                  <div className="text-left">
+                    <h3 className="text-sm font-semibold">Visual Brand</h3>
+                    <p className="mt-0.5 text-xs text-muted-foreground">Colors, fonts, and design rules injected into every campaign design brief</p>
+                  </div>
+                </div>
+              </AccordionTrigger>
+              <AccordionContent className="px-4 pb-6 pt-2">
+                <div className="space-y-5">
+                  <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+                    {[
+                      { key: "primary_color", label: "Primary Color" },
+                      { key: "secondary_color", label: "Secondary Color" },
+                      { key: "accent_color", label: "Accent Color" },
+                      { key: "background_color", label: "Background" },
+                    ].map(({ key, label }) => (
+                      <div key={key} className="space-y-2">
+                        <Label className="text-xs">{label}</Label>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="color"
+                            value={visualData[key] || "#000000"}
+                            onChange={(e) => setVisualData({ ...visualData, [key]: e.target.value })}
+                            className="h-9 w-9 cursor-pointer rounded border border-input p-0.5"
+                          />
+                          <Input
+                            value={visualData[key] || ""}
+                            onChange={(e) => setVisualData({ ...visualData, [key]: e.target.value })}
+                            placeholder="#hex"
+                            className="h-9 font-mono text-xs"
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label className="text-xs">Heading Font</Label>
+                      <Input value={visualData.font_heading || ""} onChange={(e) => setVisualData({ ...visualData, font_heading: e.target.value })} placeholder="e.g. Montserrat Bold" className="h-9" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs">Body Font</Label>
+                      <Input value={visualData.font_body || ""} onChange={(e) => setVisualData({ ...visualData, font_body: e.target.value })} placeholder="e.g. Inter Regular" className="h-9" />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label className="text-xs">Logo Usage Rules</Label>
+                      <Textarea value={visualData.logo_usage_rules || ""} onChange={(e) => setVisualData({ ...visualData, logo_usage_rules: e.target.value })} placeholder="e.g. Top-left corner, min 40px, white or dark backgrounds only, no distortion" className="h-20 resize-none text-sm" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs">Visual Style Direction</Label>
+                      <Textarea value={visualData.visual_style || ""} onChange={(e) => setVisualData({ ...visualData, visual_style: e.target.value })} placeholder="e.g. Flat illustration with bold colors, minimal whitespace, high contrast" className="h-20 resize-none text-sm" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs">Photography Style</Label>
+                      <Textarea value={visualData.photography_style || ""} onChange={(e) => setVisualData({ ...visualData, photography_style: e.target.value })} placeholder="e.g. Real students, natural light, no stock photos, candid study moments" className="h-20 resize-none text-sm" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs">Layout Preference</Label>
+                      <Textarea value={visualData.layout_preference || ""} onChange={(e) => setVisualData({ ...visualData, layout_preference: e.target.value })} placeholder="e.g. Mobile-first, key info above fold, CTA at bottom right" className="h-20 resize-none text-sm" />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-xs">Markdown Design Spec <span className="text-muted-foreground">(optional — freeform, injected verbatim)</span></Label>
+                    <Textarea
+                      value={visualData.markdown_design_spec || ""}
+                      onChange={(e) => setVisualData({ ...visualData, markdown_design_spec: e.target.value })}
+                      placeholder="Write any additional design instructions in plain text or markdown. This is appended verbatim to every design brief."
+                      className="h-32 resize-none font-mono text-xs"
+                    />
+                    <p className="text-[11px] text-muted-foreground">
+                      Use this for seasonal overrides, special event styling rules, or anything not captured by the structured fields above.
+                    </p>
+                  </div>
+                </div>
+                <div className="mt-6 flex justify-end">
+                  <Button size="sm" onClick={handleSaveVisualBrand} disabled={updateMutation.isPending}>
+                    <Save className="mr-2 h-4 w-4" /> Save Visual Brand
                   </Button>
                 </div>
               </AccordionContent>

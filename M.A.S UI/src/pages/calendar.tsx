@@ -8,7 +8,7 @@ import {
 } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
-import { CalendarDays, CheckCircle2, Clock, Plus, Pencil, Trash2 } from "lucide-react";
+import { CalendarDays, CheckCircle2, Clock, Plus, Pencil, Trash2, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -33,6 +33,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 
 const UNI_OPTIONS = ["UNZA", "CBU", "MU", "ZCAS", "DMI"];
@@ -43,6 +44,7 @@ type EventFormData = {
   event_end_date: string;
   label: string;
   universities: string[];
+  creative_override_allowed: boolean;
 };
 
 function EventForm({
@@ -132,6 +134,22 @@ function EventForm({
           ))}
         </div>
       </div>
+      {["holiday", "graduation", "other"].includes(value.event_type) && (
+        <div className="flex items-start gap-3 rounded-md border border-amber-100 bg-amber-50/50 p-3">
+          <Switch
+            checked={value.creative_override_allowed}
+            onCheckedChange={(v) => onChange({ ...value, creative_override_allowed: v })}
+          />
+          <div>
+            <Label className="flex items-center gap-1.5 text-xs font-semibold text-amber-800">
+              <Sparkles className="h-3 w-3" /> Allow creative deviation
+            </Label>
+            <p className="mt-0.5 text-[11px] leading-snug text-amber-700/80">
+              Permits the design agent to deviate from the brand palette within the accent color family. Use for seasonal or celebratory events.
+            </p>
+          </div>
+        </div>
+      )}
       <DialogFooter>
         <Button type="submit" disabled={isPending || value.universities.length === 0}>
           {submitLabel}
@@ -147,6 +165,7 @@ const BLANK_FORM: EventFormData = {
   event_end_date: "",
   label: "",
   universities: [],
+  creative_override_allowed: false,
 };
 
 export default function Calendar() {
@@ -185,6 +204,7 @@ export default function Calendar() {
       event_end_date: event.event_end_date ?? "",
       label: event.label,
       universities: event.universities ?? [],
+      creative_override_allowed: event.creative_override_allowed ?? false,
     });
     setEditEvent(event);
   }
