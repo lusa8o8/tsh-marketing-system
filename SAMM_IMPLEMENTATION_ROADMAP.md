@@ -5,6 +5,99 @@ This document translates the target `samm` architecture into an execution roadma
 
 The goal is to move from the current stabilized runtime toward the full modular agent system without losing reliability, deferred product work, or change discipline.
 
+---
+
+## Test Status
+
+Living record of what has been browser-verified vs pending. Update this when a test is confirmed — do not remove pending items until they pass in the browser.
+
+### Legend
+- ✅ Verified in browser
+- ⬜ Pending — built and deployed, not yet browser-tested
+- 🔲 Not implemented — awaiting milestone
+
+---
+
+### M10 — Editable Calendar + NL Calendar Commands
+| Test | Status |
+|------|--------|
+| Calendar UI — Add event, fill details, save → appears in calendar | ✅ 2026-04-11 |
+| Calendar UI — Edit existing event, change name/date → updates in place | ✅ 2026-04-11 |
+| Calendar UI — Delete event, confirm → removed from calendar | ✅ 2026-04-11 |
+| NL create — "Add a [topic] event on [date]" → event appears in Calendar | ✅ 2026-04-11 |
+| NL edit — "Change [event] to [new date]" → DB update executes, calendar reflects change | ✅ 2026-04-11 (fix: needs_confirmation:false) |
+| NL delete — "Delete [event]" → confirmation card renders, confirm → event deleted | ✅ 2026-04-11 (fix: response.confirmation + fast-path) |
+| NL compound — "Schedule campaign for [event] on [date] and run pipeline" → event created + Pipeline C brief in Inbox | ✅ 2026-04-11 (fix: isCalendarCreateSignal guard) |
+| NL scheduler — "Run Pipeline A/B/C" → correct pipeline fires | ✅ 2026-04-11 |
+| NL ambiguity — vague event description → samm asks for clarification, does not hallucinate a date | ⬜ |
+
+---
+
+### M11A — Pipeline C Event Context Pass-Through
+| Test | Status |
+|------|--------|
+| Named trigger — "schedule campaign for UNZA graduation on 30 April and run" → brief shows that specific event, not next-in-DB | ✅ 2026-04-11 |
+| DB query fallback — "run the campaign pipeline" (no event named) → brief targets next real calendar event | ✅ 2026-04-11 |
+| Empty calendar error — "run the campaign pipeline" with no upcoming events → clear error, no demo run | ✅ 2026-04-11 |
+
+---
+
+### M11B — Duration Constraint + Post Scheduling
+| Test | Status |
+|------|--------|
+| Campaign brief shows duration_days of 7–14, not 30–31 | ✅ 2026-04-11 (fix: maxDurationDays clamp) |
+| 6 posts land in Content Registry after brief approval | ✅ 2026-04-11 |
+| Post scheduled_at timestamps are evenly spread from today → event date - 1 day (not all on trigger day) | ⬜ |
+
+---
+
+### M11C — Accuracy + Registry Polish
+| Test | Status |
+|------|--------|
+| Campaign brief Inbox card shows structured sections with no [object Object] | ✅ 2026-04-11 (fix: structured renderer in inbox.tsx) |
+| Campaign brief Inbox card shows competitor_insights_source: 'simulated' label | ⬜ |
+| Monitor stage completes without claiming to measure unpublished post performance (status: ready/needs_attention) | ⬜ |
+
+---
+
+### M11D — event_end_date Schema Extension
+| Test | Status |
+|------|--------|
+| Calendar UI Add — "End Date" optional field visible in form | ⬜ |
+| Calendar UI Edit — End Date field pre-fills from existing event, saves correctly | ⬜ |
+| End Date field only accepts dates on or after the Start Date (min constraint) | ⬜ |
+
+---
+
+### M11E — Brand Visual Kit + Design Brief Injection
+| Test | Status |
+|------|--------|
+| Settings → Visual Brand — fill hex colors, font names, save → reload → values persist | ⬜ |
+| Settings → Visual Brand — fill social handles (YouTube, Facebook, WhatsApp), save → reload → values persist | ⬜ |
+| Settings → Visual Brand — fill Primary CTA URL, save → reload → value persists | ⬜ |
+| Settings → Brand Voice — add approved hashtags, select post format preference, save → persist | ⬜ |
+| Run campaign → design brief in Content Registry includes exact hex colors and font names (not hallucinated) | ⬜ |
+| Run campaign → design brief includes SOCIAL HANDLES block with exact per-platform values | ⬜ |
+| Run campaign → design brief includes QR CODE / PRIMARY CTA LINK line | ⬜ |
+| Run campaign → design brief includes exact platform dimensions (1200×628, 1080×1080, etc.) | ⬜ |
+| Calendar UI — "Allow creative deviation" toggle visible for graduation/holiday/other event types | ⬜ |
+| Calendar UI — toggle hidden (not rendered) for exam and registration event types | ⬜ |
+| Run campaign for creative_override_allowed event → design brief includes palette deviation permission note | ⬜ |
+| Run campaign → approved hashtags appear in copy assets; no hallucinated alternatives | ⬜ |
+| Design brief in Canva AI — completes design without asking for social handles, QR link, or logo location | ⬜ |
+
+---
+
+### M11F — Platform Cadence Policy
+| Test | Status |
+|------|--------|
+| Launch blast — all platforms scheduled on day 0 within preferred_time_utc window | 🔲 |
+| Sustaining cadence — no two platforms share the same post day after day 0 | 🔲 |
+| Max post cap — no platform exceeds max_posts_per_campaign | 🔲 |
+| Post schedule in Inbox card shows staggered timestamps, not uniform sequential times | 🔲 |
+
+---
+
 ## Current Baseline
 Already stable and verified:
 - `coordinator-chat` scheduler-first handling for Pipeline A status and run requests
@@ -788,9 +881,8 @@ Commit policy:
 
 ## Milestone 11B: Pipeline C — Duration Constraint + Post Scheduling Fix
 Status:
-- design locked 2026-04-11 (see PIPELINE_C_DESIGN.md)
-- depends on M11A (needs real event context to compute days_until_event)
-- implementation not started
+- complete 2026-04-11
+- browser-verified partial (duration constraint ✅, posts count ✅, scheduled_at spread ⬜ — see Test Status)
 
 Goal:
 - campaign duration is bounded by the lead window, not left to the model
