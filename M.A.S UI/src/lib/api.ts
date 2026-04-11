@@ -14,6 +14,7 @@ type InboxFilter = {
 type ContentFilter = {
   status?: string;
   limit?: number;
+  created_by?: string;
 };
 
 type PipelineRunsFilter = {
@@ -541,6 +542,7 @@ export function useListContent(params: ContentFilter = {}, options?: QueryHookOp
       const statuses = getContentStatusFilter(params.status);
       if (statuses.length === 1) query = query.eq("status", statuses[0]);
       if (statuses.length > 1) query = query.in("status", statuses);
+      if (params.created_by) query = query.eq("created_by", params.created_by);
       if (params.limit) query = query.limit(params.limit);
 
       const { data, error } = await query;
@@ -584,35 +586,47 @@ export function useActionContent(options?: MutationHookOptions) {
       const { error } = await supabase.from("content_registry").update(patch).eq("id", id).eq("org_id", getOrgId());
       if (error) throw error;
 
-      // Pipeline B resume: check for linked weekly draft_approval inbox rows
-      const { data: relatedInboxRows } = await supabase
-        .from("human_inbox")
-        .select("id, created_by_pipeline")
-        .eq("ref_id", id)
-        .eq("item_type", "draft_approval")
-        .eq("org_id", getOrgId());
-
-      if ((relatedInboxRows ?? []).some((row: any) => row.created_by_pipeline === "pipeline-b-weekly")) {
-        await requestPipelineBResume();
-      }
-
-      // Pipeline C resume gate — design_brief rows are not copy gates, skip entirely
+      // Pipeline resume gate — design_brief rows are never copy gates, skip entirely
       if (pipelineRunId && platform !== "design_brief") {
-        if (data.action === "reject") {
-          // Rejection always triggers resume so pipeline can create revision item
-          await requestPipelineCResume();
-        } else {
-          // Approve: only trigger if no copy draft rows remain for this run
+        // Look up which pipeline owns this run so we know which resume to trigger
+        const { data: runRow } = await supabase
+          .from("pipeline_runs")
+          .select("pipeline")
+          .eq("id", pipelineRunId)
+          .single();
+
+        const ownerPipeline = runRow?.pipeline ?? "";
+
+        if (ownerPipeline.includes("pipeline-b")) {
+          // Pipeline B: trigger resume when no draft rows remain for this run
+          // (resume function handles both approve-all and all-rejected cases)
           const { count } = await supabase
             .from("content_registry")
             .select("id", { count: "exact", head: true })
             .eq("pipeline_run_id", pipelineRunId)
             .eq("status", "draft")
-            .neq("platform", "design_brief")
             .eq("org_id", getOrgId());
 
           if ((count ?? 0) === 0) {
+            await requestPipelineBResume();
+          }
+        } else if (ownerPipeline.includes("pipeline-c")) {
+          if (data.action === "reject") {
+            // Rejection always triggers resume so pipeline can create revision item
             await requestPipelineCResume();
+          } else {
+            // Approve: only trigger if no copy draft rows remain for this run
+            const { count } = await supabase
+              .from("content_registry")
+              .select("id", { count: "exact", head: true })
+              .eq("pipeline_run_id", pipelineRunId)
+              .eq("status", "draft")
+              .neq("platform", "design_brief")
+              .eq("org_id", getOrgId());
+
+            if ((count ?? 0) === 0) {
+              await requestPipelineCResume();
+            }
           }
         }
       }

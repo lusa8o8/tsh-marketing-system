@@ -205,7 +205,7 @@ Deno.serve(async (req) => {
       results.posts_drafted++
     }
 
-    console.log('Sending drafts to human inbox for approval...')
+    console.log('Sending drafts to Content Registry for approval...')
 
     for (const post of draftedPosts) {
       const { data: registryRow } = await supabase
@@ -215,7 +215,8 @@ Deno.serve(async (req) => {
           platform: post.platform,
           body: post.body,
           subject_line: post.subject_line ?? null,
-          status: 'pending_approval',
+          status: 'draft',
+          pipeline_run_id: runId,
           scheduled_at: getScheduledTime(post.scheduled_day, context.today),
           created_by: 'pipeline-b-weekly'
         })
@@ -226,29 +227,10 @@ Deno.serve(async (req) => {
         results.draft_content_ids.push(registryRow.id)
       }
 
-      await supabase.from('human_inbox').insert({
-        org_id: context.orgId,
-        item_type: 'draft_approval',
-        priority: 'normal',
-        payload: {
-          platform: post.platform,
-          body: post.body,
-          subject_line: post.subject_line,
-          scheduled_day: post.scheduled_day,
-          content_source: post.content_source,
-          content_registry_id: registryRow?.id,
-          pipeline_run_id: runId
-        },
-        created_by_pipeline: 'pipeline-b-weekly',
-        created_by_agent: getAgentDefinition('copy_writer').id,
-        ref_table: 'content_registry',
-        ref_id: registryRow?.id
-      })
-
       results.drafts_sent_for_approval++
     }
 
-    console.log(`${results.drafts_sent_for_approval} drafts sent to human inbox`)
+    console.log(`${results.drafts_sent_for_approval} drafts sent to Content Registry`)
 
     await updatePipelineBRun(
       supabase,
@@ -387,7 +369,7 @@ async function resumePipelineBRun(params: {
     if (draftsError) throw new Error(`Failed to load Pipeline B drafts: ${draftsError.message}`)
 
     const drafts = draftRows ?? []
-    const pendingDrafts = drafts.filter((row: any) => row.status === 'pending_approval' || row.status === 'draft')
+    const pendingDrafts = drafts.filter((row: any) => row.status === 'draft')
     if (pendingDrafts.length > 0) {
       await updatePipelineBRun(
         supabase,
