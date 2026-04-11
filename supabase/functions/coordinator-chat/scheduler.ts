@@ -287,56 +287,29 @@ async function schedulePipelineRun(supabase: any, pipeline: PipelineTarget, orgI
     }
   }
 
-  await invokePipeline(supabase, pipeline.id, orgId)
-  const refreshedRun = await fetchLatestPipelineRun(supabase, orgId, pipeline.id)
+  // Fire the pipeline in the background so coordinator-chat returns immediately.
+  // The toast on the frontend fires as soon as this response lands (<1s).
+  // Pipeline status and run rows are visible in Operations once the run starts.
+  const runTask = invokePipeline(supabase, pipeline.id, orgId)
+    .catch((err: unknown) => {
+      const msg = err instanceof Error ? err.message : String(err)
+      console.error(`Background run of ${pipeline.id} failed: ${msg}`)
+    })
 
-  if (refreshedRun?.status === PIPELINE_RUN_STATUS.FAILED) {
-    return {
-      message: `${pipeline.title} failed immediately. ${refreshedRun.result?.error ?? 'No failure summary recorded.'}`,
-      suggestions: ['Check pipeline results', 'What needs my approval?', 'Summarize this week'],
-      invoked_action: {
-        type: 'run_pipeline',
-        pipeline: pipeline.id,
-        status: PIPELINE_RUN_STATUS.FAILED,
-        run_id: refreshedRun.id ?? null,
-      },
-    }
-  }
-
-  if (refreshedRun?.status === PIPELINE_RUN_STATUS.WAITING_HUMAN) {
-    return {
-      message: `${pipeline.title} is waiting on human approval before it can continue.`,
-      suggestions: ['What needs my approval?', 'Check pipeline results', 'Summarize this week'],
-      invoked_action: {
-        type: 'run_pipeline',
-        pipeline: pipeline.id,
-        status: PIPELINE_RUN_STATUS.WAITING_HUMAN,
-        run_id: refreshedRun.id ?? null,
-      },
-    }
-  }
-
-  if (refreshedRun?.status === PIPELINE_RUN_STATUS.SUCCESS) {
-    return {
-      message: `${pipeline.title} completed successfully. ${refreshedRun.result_summary ?? refreshedRun.result?.error ?? 'The latest run is now reflected in workspace state.'}`,
-      suggestions: ['Check pipeline results', 'What needs my approval?', 'Summarize this week'],
-      invoked_action: {
-        type: 'run_pipeline',
-        pipeline: pipeline.id,
-        status: 'completed',
-        run_id: refreshedRun.id ?? null,
-      },
-    }
+  try {
+    EdgeRuntime.waitUntil(runTask)
+  } catch {
+    // EdgeRuntime not available outside Supabase — promise still runs
   }
 
   return {
-    message: `${pipeline.title} has been started and is now running.`,
+    message: `${pipeline.title} has been started. Check Operations for live status.`,
     suggestions: ['Check pipeline results', 'What needs my approval?', 'Summarize this week'],
     invoked_action: {
       type: 'run_pipeline',
       pipeline: pipeline.id,
       status: PIPELINE_RUN_STATUS.RUNNING,
-      run_id: refreshedRun?.id ?? null,
+      run_id: null,
     },
   }
 }
