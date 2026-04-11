@@ -510,12 +510,13 @@ function DesignBriefCard({
   );
 }
 
-type TabStatus = "draft" | "scheduled" | "published" | "failed";
+type TabStatus = "draft" | "scheduled" | "published" | "comments" | "failed";
 
 const TABS: { id: TabStatus; label: string }[] = [
   { id: "draft", label: "Drafts" },
   { id: "scheduled", label: "Scheduled" },
   { id: "published", label: "Published" },
+  { id: "comments", label: "Comments" },
   { id: "failed", label: "Failed" },
 ];
 
@@ -568,8 +569,11 @@ export default function Content() {
     queryClient.invalidateQueries({ queryKey: ["pipeline-runs"] });
   };
 
-  const { data: items, isLoading } = useListContent({ status }, {
-    query: { queryKey: getListContentQueryKey({ status }) }
+  const contentParams = status === "comments"
+    ? { status: "published" as const, created_by: "pipeline-a-engagement" }
+    : { status };
+  const { data: items, isLoading } = useListContent(contentParams, {
+    query: { queryKey: getListContentQueryKey(contentParams) }
   });
 
   const retryMutation = useRetryContent({ mutation: { onSuccess: invalidate } });
@@ -624,10 +628,14 @@ export default function Content() {
     );
   };
 
-  // Design briefs only appear in the Drafts tab — filter them from all other tabs
-  const displayItems = status !== "draft"
-    ? (items ?? []).filter((i: ContentItem) => i.platform !== "design_brief")
-    : (items ?? []);
+  // Design briefs only appear in the Drafts tab.
+  // Pipeline A engagement replies have their own Comments tab — exclude from Published.
+  const displayItems = (() => {
+    const all = items ?? [];
+    if (status === "draft") return all;
+    if (status === "comments") return all; // already filtered at query level
+    return all.filter((i: ContentItem) => i.platform !== "design_brief");
+  })();
 
   const { groups, ungrouped } = status === "draft" && displayItems.length > 0
     ? groupDraftsByCampaign(displayItems as ContentItem[])
@@ -682,7 +690,7 @@ export default function Content() {
           ) : (groups.length === 0 && ungrouped.length === 0 && displayItems.length === 0) ? (
             <div className="py-20 text-center text-muted-foreground">
               <LayoutList className="mx-auto mb-4 h-12 w-12 opacity-20" />
-              <p>No {status} content found.</p>
+              <p>{status === "comments" ? "No engagement replies yet. Run the Engagement Pipeline to process comments." : `No ${status} content found.`}</p>
             </div>
           ) : (
             <>
