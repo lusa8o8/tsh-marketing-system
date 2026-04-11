@@ -196,17 +196,23 @@ These NL patterns are handled by `coordinator-chat/scheduler.ts` and have not al
 - "Resume Pipeline B" → resumes a waiting_human run
 - "Cancel" (after a confirmation prompt) → samm acknowledges, nothing triggered
 
-### Milestone Queue (after all verification passes)
-- **M11**: Live Platform Publishing — replace `getMockComments()` with real Facebook/WhatsApp/YouTube API reads
-- **M12**: Multi-Channel samm Access (Slack, Teams, WhatsApp, Telegram, email inbound)
-- **M13**: Voice Interface
-- **M14**: Dashless Operation (Google Sheets, Docs, Excel)
-- **M15**: Visual Plugin Builder
-- **M16**: Sales and CRM Integration
+### Milestone Queue
+- **M11A**: Pipeline C — Event Context Pass-Through ← **NEXT**
+- **M11B**: Pipeline C — Duration Constraint + Post Scheduling Fix (depends on M11A)
+- **M11C**: Pipeline C — Monitor reframe, competitor label, canonical_copy_writer registry entry (independent)
+- **M11D**: Pipeline C — event_end_date schema extension (independent)
+- **M12**: One-Off Post Pipeline (Pipeline D) — ad-hoc single post, no brief/CEO gate
+- **M13**: Live Platform Publishing — real Facebook/WhatsApp/YouTube/email API calls
+- **M14**: Multi-Channel samm Access (Slack, Teams, WhatsApp, Telegram, email inbound)
+- **M15**: Voice Interface
+- **M16**: Dashless Operation (Google Sheets, Docs, Excel)
 
 ### Deferred
 - **M8B**: Onboarding Flow UI (4-5 screen wizard)
 - **M9**: Copy Quality Check (Pipeline C phase 3 critic pass)
+
+### Architecture Design Docs
+- `PIPELINE_C_DESIGN.md` — full Pipeline C agent inventory, 7 design problems, event context pass-through design, one-off post gap, implementation order. **Read before any Pipeline C code changes.**
 
 ---
 
@@ -300,6 +306,7 @@ Expected result: `comments_processed:7, replies_sent:5, escalations:1, spam_igno
 - `SAMM_CODEBASE_MAPPING.md`
 - `SAMM_IMPLEMENTATION_ROADMAP.md`
 - `SAMM_FULL_SYSTEM_ARCHITECTURE.md`
+- `PIPELINE_C_DESIGN.md` — Pipeline C agent inventory, 7 design problems + fixes, event context pass-through, one-off post gap
 
 ---
 

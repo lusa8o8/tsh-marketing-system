@@ -735,9 +735,134 @@ Verification checklist:
 - NL with Pipeline C: prompt samm "Schedule a campaign for [event] on [date] and run the campaign pipeline" → event created AND Pipeline C triggered → campaign brief lands in Inbox
 - NL ambiguity: prompt samm with a vague event description → samm asks for clarification rather than hallucinating a date
 
-## Milestone 11: Live Platform Publishing
+## Milestone 10 — Verified Status (2026-04-11)
+
+Calendar UI (add/edit/delete), NL calendar commands, Pipeline B end-to-end, and samm NL scheduler commands are all verified. Pipeline C compound intent ("schedule + run") and NL edit both fixed and verified.
+
+Three fixes committed during M10 verification:
+- `e6f6e0f`: compound intent bypass (scheduler.ts isCalendarCreateSignal guard) + NL edit needs_confirmation: false
+- `3603c50`: academic_calendar event_type constraint widened to include 'graduation' (NOT VALID)
+- `508e048`: pipeline taxonomy docs + accurate trigger message for pipeline-c-campaign
+
+Known behavioral note committed to NEXT_AGENT_HANDOFF.md:
+- Pipeline C does not receive the specific event as context when triggered — it targets the next due event at runtime. This is a design gap addressed in M11A below.
+
+---
+
+## Milestone 11A: Pipeline C — Event Context Pass-Through
 Status:
-- planned (previously Milestone 10)
+- design locked 2026-04-11 (see PIPELINE_C_DESIGN.md)
+- implementation not started
+
+Goal:
+- Pipeline C runs for the specific event it was triggered for, not a hardcoded demo event
+- standalone "run the campaign pipeline" triggers query the next real upcoming event from academic_calendar, not a hardcoded fallback
+- samm surfaces a clear error if no upcoming event exists
+
+Design locked in PIPELINE_C_DESIGN.md. Do not implement without reading that document first.
+
+Scope:
+- `coordinator-chat/scheduler.ts`: add `CalendarEventContext` type; `schedulePipelineRun` accepts optional `eventContext` parameter; passes it as `calendarEvent` in the invoke payload
+- `coordinator-chat/index.ts`: pass `eventContext` from `action.label/event_date/event_type/universities` when triggering from `create_calendar_event` handler
+- `pipeline-c-campaign/index.ts`: replace hardcoded fallback with `getNextCalendarEvent(supabase, orgId, today)` DB query; throw a clear error (not a silent fallback) when no event is found
+
+Do not include:
+- campaign duration or scheduling fixes (M11B)
+- agent registry changes (M11C)
+- event_end_date migration (M11D)
+
+Verification:
+- "schedule a campaign for UNZA graduation on 30 April and run the pipeline" → campaign brief in Inbox shows "UNZA graduation" not "UNZA semester 1 exams"
+- "run the campaign pipeline" (no event named) → Pipeline C queries DB, targets the next real calendar event, brief shows that event
+- "run the campaign pipeline" with no upcoming events in DB → pipeline fails with clear "no upcoming calendar event" message, not a demo run
+
+Commit policy:
+- one stable commit after both trigger paths are verified end-to-end
+
+---
+
+## Milestone 11B: Pipeline C — Duration Constraint + Post Scheduling Fix
+Status:
+- design locked 2026-04-11 (see PIPELINE_C_DESIGN.md)
+- depends on M11A (needs real event context to compute days_until_event)
+- implementation not started
+
+Goal:
+- campaign duration is bounded by the lead window, not left to the model
+- posts are spread across the campaign window, not bunched at trigger time
+
+Scope:
+- `runCampaignPlanner`: compute `max_duration = Math.min(days_until_event, 14)` before the LLM call; pass as constraint in the prompt
+- `getScheduledTime`: replace index-based offset with even spread across `campaignStart → eventDate - 1 day`
+
+Verification:
+- campaign brief shows `duration_days` of 7-14, not 30-31
+- 6 posts scheduled at evenly spaced intervals between today and the event date
+- post dates visible in Content Registry scheduled_at field
+
+---
+
+## Milestone 11C: Pipeline C — Accuracy + Registry Polish
+Status:
+- design locked 2026-04-11 (see PIPELINE_C_DESIGN.md)
+- independent of M11A/B (can be done in parallel or after)
+
+Goal:
+- monitor prompt is honest about what it is actually checking at Stage 3
+- competitor researcher is labelled as simulated, not presented as real research
+- canonical copy writer appears in the agent registry
+
+Scope:
+- `runMonitor` system prompt: reframe as "campaign readiness check" (KPI targets coherent, brand voice complete, event window valid) not "campaign performance check". Real performance monitoring deferred to post-M11 live publishing.
+- `runCompetitorResearcher`: add `competitor_insights_source: 'simulated'` to the returned object; include this label in the brief payload so it is visible to the CEO reviewing the brief
+- `AGENT_REGISTRY`: add `canonical_copy_writer` entry
+
+Verification:
+- campaign brief in Inbox shows a note that competitor insights are simulated
+- monitor stage completes without claiming to measure unpublished post performance
+
+---
+
+## Milestone 11D: Pipeline C — event_end_date Schema Extension
+Status:
+- design locked 2026-04-11 (see PIPELINE_C_DESIGN.md)
+- independent of M11A/B/C
+
+Goal:
+- academic calendar events can have an end date (for multi-day exam windows, orientation weeks, etc.)
+- campaign planner uses the event window for duration and scheduling instead of guessing
+
+Scope:
+- migration: `ALTER TABLE academic_calendar ADD COLUMN IF NOT EXISTS event_end_date date;`
+- `calendar.tsx` EventForm: add optional "End date" date picker field
+- `api.ts` create/update mutations: include `event_end_date` in the payload
+- `pipeline-c-campaign/index.ts`: use `event_end_date` in scheduling if present
+
+---
+
+## Milestone 12: One-Off Post Pipeline (Pipeline D)
+Status:
+- design locked 2026-04-11 (see PIPELINE_C_DESIGN.md — One-Off Post Gap section)
+- not started — scope to be detailed before implementation
+
+Goal:
+- handle ad-hoc "write a post about X" requests without the full campaign workflow
+- no brief, no CEO gate, no research phase, no monitor
+- 1-3 platform drafts → Content Registry → marketer review → done
+
+Design notes:
+- canonical_copy_writer + copy_writer only (2 LLM calls max)
+- accepts: topic, platform list (optional, defaults to all), event reference (optional)
+- completes in < 10 seconds
+- no WAITING_HUMAN gate for brief — goes straight to Content Registry as drafts
+- samm routing rule: "write a post about X" / "draft a post for [platform]" → Pipeline D
+- samm response until Pipeline D exists: "I can run a full campaign for that. For a single quick post, you can add it directly in the Content Registry — one-off post pipeline is on the roadmap."
+
+---
+
+## Milestone 13: Live Platform Publishing
+Status:
+- planned (previously Milestone 11)
 
 Goal:
 - replace mock publish actions with real platform API calls behind the existing adapter interfaces
