@@ -585,7 +585,7 @@ Respond with JSON only matching this structure exactly:
 Event date: ${event.event_date}
 Universities: ${event.universities.join(', ')}
 Days until event: ${daysUntilEvent}
-Maximum campaign duration: ${maxDurationDays} days (do not exceed this — campaign must end on or before the event date)
+Maximum campaign duration: ${maxDurationDays} days. This is days, not weeks. duration_days in your response must be a number between 1 and ${maxDurationDays}. Do not write "week" or "weeks" anywhere in the brief — use days only.
 
 Performance context: ${JSON.stringify(perfData)}
 Competitor opportunity: ${JSON.stringify(competitorData)}
@@ -596,7 +596,10 @@ Create the campaign brief.`
   })
 
   const raw = response.content[0].type === 'text' ? response.content[0].text : '{}'
-  return JSON.parse(extractJSON(raw))
+  const brief = JSON.parse(extractJSON(raw))
+  // Clamp duration regardless of model output — prevents "14 weeks" style errors
+  brief.duration_days = Math.min(Math.max(1, Number(brief.duration_days) || maxDurationDays), maxDurationDays)
+  return brief
 }
 
 // ── canonical copy writer ─────────────────────────────────────────────

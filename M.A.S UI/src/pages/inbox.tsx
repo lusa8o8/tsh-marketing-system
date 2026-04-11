@@ -244,19 +244,62 @@ function InboxItemCard({ item }: { item: any }) {
 
       {expanded && (
         <div className="space-y-4 border-t bg-muted/10 px-4 pb-4 pt-3 text-[13px]">
-          {item.item_type === "campaign_brief" && (
-            <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-3">
-              {Object.entries(item.payload).map(([key, value]) => {
-                if (key === "title" || key === "preview") return null;
-                return (
-                  <div key={key} className="contents">
-                    <dt className="whitespace-nowrap font-medium capitalize text-muted-foreground">{key.replace(/_/g, " ")}</dt>
-                    <dd className="break-words text-foreground">{String(value)}</dd>
+          {item.item_type === "campaign_brief" && (() => {
+            const brief = item.payload.campaign_brief ?? {}
+            const research = item.payload.research_summary ?? {}
+            return (
+              <div className="space-y-4">
+                {/* Top-level event context */}
+                <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2">
+                  {[
+                    ["Event", item.payload.event_label],
+                    ["Event date", item.payload.event_date],
+                    ["Universities", Array.isArray(item.payload.universities) ? item.payload.universities.join(", ") : item.payload.universities],
+                  ].map(([label, val]) => val ? (
+                    <div key={label as string} className="contents">
+                      <dt className="whitespace-nowrap font-medium text-muted-foreground">{label}</dt>
+                      <dd className="break-words text-foreground">{val as string}</dd>
+                    </div>
+                  ) : null)}
+                </dl>
+
+                {/* Campaign brief fields */}
+                {Object.keys(brief).length > 0 && (
+                  <div>
+                    <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Campaign Brief</p>
+                    <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2">
+                      {(["name","goal","target_audience","key_message","call_to_action","duration_days","platforms","universities","expected_signups"] as const).map((key) => {
+                        const val = brief[key]
+                        if (val === undefined || val === null) return null
+                        const display = Array.isArray(val) ? val.join(", ") : key === "duration_days" ? `${val} days` : String(val)
+                        return (
+                          <div key={key} className="contents">
+                            <dt className="whitespace-nowrap font-medium text-muted-foreground capitalize">{key.replace(/_/g, " ")}</dt>
+                            <dd className="break-words text-foreground">{display}</dd>
+                          </div>
+                        )
+                      })}
+                    </dl>
                   </div>
-                );
-              })}
-            </dl>
-          )}
+                )}
+
+                {/* Research summary */}
+                {Object.keys(research).length > 0 && (
+                  <div>
+                    <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Research Summary</p>
+                    <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2">
+                      {Object.entries(research).map(([k, v]) => (
+                        <div key={k} className="contents">
+                          <dt className="whitespace-nowrap font-medium text-muted-foreground capitalize">{k.replace(/_/g, " ")}</dt>
+                          <dd className="break-words text-foreground">{typeof v === "object" ? JSON.stringify(v) : String(v)}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                  </div>
+                )}
+              </div>
+            )
+          })()}
 
           {(item.item_type === "weekly_report" || item.item_type === "campaign_report") && (
             <MarkdownBody content={item.payload.body || item.payload.report || ""} />
