@@ -258,8 +258,22 @@ function InboxItemCard({ item }: { item: any }) {
             </dl>
           )}
 
-          {(item.item_type === "weekly_report" || item.item_type === "campaign_report" || item.item_type === "suggestion") && (
+          {(item.item_type === "weekly_report" || item.item_type === "campaign_report") && (
             <MarkdownBody content={item.payload.body || item.payload.report || ""} />
+          )}
+
+          {item.item_type === "suggestion" && (
+            <div className="space-y-3">
+              {item.payload.comment_text ? (
+                <div className="rounded-md border-l-4 border-border bg-muted/30 px-3 py-2">
+                  {item.payload.author && (
+                    <p className="mb-1 text-xs font-medium text-muted-foreground">{item.payload.author}{item.payload.platform ? ` · ${item.payload.platform}` : ""}</p>
+                  )}
+                  <p className="text-sm italic text-foreground">&quot;{item.payload.comment_text}&quot;</p>
+                </div>
+              ) : null}
+              <p className="text-sm text-muted-foreground">{item.payload.suggestion || item.payload.body || ""}</p>
+            </div>
           )}
 
           {item.item_type === "escalation" && (
