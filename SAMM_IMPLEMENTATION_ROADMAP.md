@@ -639,7 +639,7 @@ Scope:
 
 ## Milestone 8C: Content Routing Corrections + UX Polish
 Status:
-- in progress — locked 2026-04-11
+- A–E implemented; E deployed 2026-04-10; browser verification pending
 
 Goal:
 - close routing gaps and UX friction identified during Milestone 8A browser verification
@@ -671,11 +671,10 @@ Scope and locked plan:
 - Add a "Comments" tab showing only `created_by = pipeline-a-engagement` published items
 - Add `created_by` filter to `ContentFilter` type and `useListContent` query
 
-**E — Test 5 escalation (investigation gate)**
-- No escalations received in Inbox after Pipeline A runs
-- Diagnose via pipeline_runs result JSON (`escalations` field); fix scoped after root cause confirmed
-- If `escalations: 0` → LLM misclassification fix in `pipeline-a-engagement/index.ts`
-- If `escalations > 0` → inbox insert failure fix (RLS or schema)
+**E — Spam misclassification fix** ✓ fixed 2026-04-10
+- Root cause confirmed via DB query: `spam_ignored: 0` across all runs; "Spam Account" comment with `bit.ly/scam123` link classified as `complaint` because "scam" in URL triggered complaint heuristic
+- Fix: sharpened `classifyComment` system prompt in `pipeline-a-engagement/index.ts` — added explicit disambiguation rule: classify as spam if unsolicited link is present (even if URL contains "scam"); classify as complaint only if a real customer describes a negative experience with THIS org
+- Redeploy `pipeline-a-engagement` and verify: `spam_ignored: 1`, `escalations: 1` on next run
 
 Do not include:
 - changes to Inbox layout or item types

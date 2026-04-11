@@ -334,6 +334,10 @@ Classify the comment into exactly one intent:
 - boost: strong advocacy, success stories, viral-sharing potential, testimonials
 - routine: questions, general engagement, requests for information, neutral feedback
 
+Key disambiguation rules:
+- Classify as SPAM if the author is promoting an external product or service, posting unsolicited links (bit.ly, tinyurl, or any shortened URL), or using bot-like patterns — even if the URL or text contains words like "scam", "fraud", or "fake". The word "scam" in a link does not make it a complaint.
+- Classify as COMPLAINT only if a real customer is describing a negative experience with THIS organisation's own products, services, or staff. The author must be a genuine customer, not a promoter.
+
 Context about the organisation:
 - Tone: ${brandVoice.tone ?? 'professional'}
 - Audience: ${brandVoice.target_audience ?? 'students'}
