@@ -751,8 +751,13 @@ Known behavioral note committed to NEXT_AGENT_HANDOFF.md:
 
 ## Milestone 11A: Pipeline C — Event Context Pass-Through
 Status:
-- design locked 2026-04-11 (see PIPELINE_C_DESIGN.md)
-- implementation not started
+- complete, browser-verified 2026-04-11
+- commit 3879f3a
+
+Also fixed during M11A verification:
+- NL calendar delete confirmation never rendered (handler returned response.action, not response.confirmation — chat UI only renders card for the latter)
+- Model hallucinated "Deleted X" with action:null when user typed "Confirm" as free text
+- Fix (355a063): delete handler returns response.confirmation with action:'calendar_delete:{id}'; fast-path at top of handler executes delete when that prefix is detected in confirmationAction — LLM bypassed entirely
 
 Goal:
 - Pipeline C runs for the specific event it was triggered for, not a hardcoded demo event

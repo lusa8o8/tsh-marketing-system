@@ -148,6 +148,11 @@ Original DB constraint on `event_type` allowed: exam, registration, holiday, ori
 ### NL edit needs `needs_confirmation: false`
 Model instruction must explicitly say `needs_confirmation: false` for `edit_calendar_event`. Without this, the model returns `needs_confirmation: true`, the handler returns the action as a confirmation prompt, and the edit never executes. Edits are reversible — no confirmation needed. Only deletes require `needs_confirmation: true`.
 
+### Confirmation card pattern — `response.confirmation` vs `response.action`
+The chat UI (`chat.tsx`) only renders a Confirm/Cancel card for `response.confirmation`. It does NOT render anything for `response.action`. If a handler returns `response.action` when `needs_confirmation: true`, no card appears — the user types free text — the model hallucinates success with `action: null` — no DB operation runs.
+**Rule:** Any operation that needs a confirmation card must return `response.confirmation`, not `response.action`.
+**Pattern used for calendar delete:** `confirmation.action = 'calendar_delete:{event_id}'` → fast-path in handler executes the delete when this prefix is detected in `confirmationAction`, bypassing the LLM entirely. This is the pattern to follow for any future destructive action that needs a confirm gate.
+
 ### `resolveExplicitSchedulerRequest` intercepts before LLM for any pipeline keyword + run verb
 If a message contains a pipeline keyword (e.g. "campaign") AND a run verb (run/start/trigger), the explicit scheduler fires that pipeline immediately — the LLM never gets called. Added `isCalendarCreateSignal` guard in `scheduler.ts:374` to exempt messages matching "schedule ... for ... on ... [date]" patterns so the LLM can choose `create_calendar_event` instead.
 
