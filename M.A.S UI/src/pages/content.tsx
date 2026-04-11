@@ -201,7 +201,13 @@ function ContentCard({
 
       {!isExpanded && (
         <div className="-mt-2 px-5 pb-4">
-          <p className="line-clamp-2 text-[13px] leading-relaxed text-muted-foreground">{stripMarkdownToPreviewText(item.body)}</p>
+          {item.metadata?.original_comment ? (
+            <p className="line-clamp-2 text-[13px] leading-relaxed text-muted-foreground">
+              &ldquo;{String(item.metadata.original_comment)}&rdquo;
+            </p>
+          ) : (
+            <p className="line-clamp-2 text-[13px] leading-relaxed text-muted-foreground">{stripMarkdownToPreviewText(item.body)}</p>
+          )}
         </div>
       )}
 
@@ -242,6 +248,19 @@ function ContentCard({
                 <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => { setEditBody(item.body); setEditSubjectLine(item.subject_line ?? ""); setIsEditing(false); }}>
                   Cancel
                 </Button>
+              </div>
+            </div>
+          ) : item.metadata?.original_comment ? (
+            <div className="space-y-3">
+              <div className="rounded-lg border-l-4 border-border bg-muted/30 px-4 py-3">
+                {item.metadata.author && (
+                  <p className="mb-1 text-[11px] font-medium text-muted-foreground">{String(item.metadata.author)}</p>
+                )}
+                <p className="text-[13px] italic leading-relaxed text-muted-foreground">&ldquo;{String(item.metadata.original_comment)}&rdquo;</p>
+              </div>
+              <div className="rounded-lg border bg-muted/40 p-4">
+                <p className="mb-2 text-[11px] font-medium text-muted-foreground">Drafted reply</p>
+                <MarkdownBody content={item.body} />
               </div>
             </div>
           ) : (

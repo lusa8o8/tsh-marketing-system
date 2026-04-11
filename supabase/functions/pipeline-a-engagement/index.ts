@@ -257,7 +257,7 @@ async function processComment(
         status: 'published',
         published_at: new Date().toISOString(),
         created_by: 'pipeline-a-engagement',
-        metadata: { intent: 'routine' },
+        metadata: { intent: 'routine', original_comment: comment.text, author: comment.author },
       })
       if (routineError) throw new Error(`Failed to insert routine reply: ${routineError.message}`)
       results.replies_sent += 1
@@ -311,7 +311,7 @@ async function processComment(
         status: 'published',
         published_at: new Date().toISOString(),
         created_by: 'pipeline-a-engagement',
-        metadata: { intent: 'boost' },
+        metadata: { intent: 'boost', original_comment: comment.text, author: comment.author },
       })
       if (contentError) throw new Error(`Failed to insert boost reply: ${contentError.message}`)
       results.boosts_suggested += 1
