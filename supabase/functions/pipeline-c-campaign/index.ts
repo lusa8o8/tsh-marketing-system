@@ -414,7 +414,8 @@ async function resumePipelineCRun(params: { supabase: any; anthropic: Anthropic;
 
     results.copy_assets_created = copyAssets.length
 
-    for (const asset of copyAssets) {
+    for (let i = 0; i < copyAssets.length; i++) {
+      const asset = copyAssets[i]
       await supabase
         .from('content_registry')
         .insert({
@@ -426,7 +427,7 @@ async function resumePipelineCRun(params: { supabase: any; anthropic: Anthropic;
           is_campaign_post: true,
           campaign_name: campaignBrief.name,
           pipeline_run_id: runId,
-          scheduled_at: getScheduledTime(asset.day_offset, context.today),
+          scheduled_at: getScheduledTime(i, copyAssets.length, context.today, event.event_date),
           created_by: 'pipeline-c-campaign'
         })
     }
@@ -550,6 +551,14 @@ async function runCampaignPlanner(
   today: string
 ): Promise<CampaignBrief> {
 
+  const daysUntilEvent = Math.max(
+    1,
+    Math.ceil((new Date(event.event_date).getTime() - new Date(today).getTime()) / (1000 * 60 * 60 * 24))
+  )
+  // Cap campaign duration at 14 days or the lead window, whichever is smaller.
+  // Prevents the model from proposing 30-day campaigns for events 3 weeks away.
+  const maxDurationDays = Math.min(daysUntilEvent, 14)
+
   const response = await anthropic.messages.create({
     model: 'claude-sonnet-4-5',
     max_tokens: 1000,
@@ -575,7 +584,8 @@ Respond with JSON only matching this structure exactly:
       content: `Triggering event: ${event.label}
 Event date: ${event.event_date}
 Universities: ${event.universities.join(', ')}
-Days until event: ${Math.ceil((new Date(event.event_date).getTime() - new Date(today).getTime()) / (1000 * 60 * 60 * 24))}
+Days until event: ${daysUntilEvent}
+Maximum campaign duration: ${maxDurationDays} days (do not exceed this — campaign must end on or before the event date)
 
 Performance context: ${JSON.stringify(perfData)}
 Competitor opportunity: ${JSON.stringify(competitorData)}
@@ -911,9 +921,20 @@ function addDays(dateStr: string, days: number): string {
   return d.toISOString().split('T')[0]
 }
 
-function getScheduledTime(dayOffset: number, today: string): string {
-  const d = new Date(today)
-  d.setDate(d.getDate() + (dayOffset || 0))
-  d.setHours(9, 0, 0, 0)
-  return d.toISOString()
+// Spread post scheduling evenly across the campaign window.
+// Posts run from today through (eventDate - 1 day) so the last post fires
+// the day before the event — not after it has already passed.
+// With 6 posts and a 14-day window: posts on days 0, 2, 4, 7, 9, 11 approx.
+function getScheduledTime(index: number, total: number, today: string, eventDate: string): string {
+  const startMs = new Date(today).getTime()
+  // End one day before the event so the last post is a pre-event reminder
+  const endMs = new Date(eventDate).getTime() - 86400000
+  const windowMs = Math.max(endMs - startMs, 0)
+
+  // Evenly space posts across the window. If window is 0 (event is today),
+  // all posts go out today — still better than stacking at index 0,1,2,3,4,5.
+  const offsetMs = total > 1 ? Math.round((index / (total - 1)) * windowMs) : 0
+  const scheduled = new Date(startMs + offsetMs)
+  scheduled.setHours(9, 0, 0, 0)
+  return scheduled.toISOString()
 }
