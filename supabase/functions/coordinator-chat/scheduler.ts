@@ -371,7 +371,12 @@ export async function resolveExplicitSchedulerRequest(params: ExplicitSchedulerP
   const requestedPipeline = inferPipelineTarget(message)
   const isExplicitConfirm = /^confirm\b/i.test(message)
   const isExplicitCancel = /^cancel\b/i.test(message)
-  const isRunRequest = Boolean(requestedPipeline) && /\b(run|start|trigger|launch|execute)\b/i.test(message)
+  // Calendar-create signals: "schedule a campaign for X on [date]" or "for X on [date] and run"
+  // These must go to the LLM so it can choose create_calendar_event, not be intercepted here.
+  const isCalendarCreateSignal =
+    /\bschedule\b.+\bfor\b.+\bon\b.+\d/i.test(message) ||
+    /\bfor\b.+\bon\b.+\d.+\b(run|pipeline)\b/i.test(message)
+  const isRunRequest = Boolean(requestedPipeline) && /\b(run|start|trigger|launch|execute)\b/i.test(message) && !isCalendarCreateSignal
   const isResumeRequest = Boolean(requestedPipeline) && /\b(resume|continue)\b/i.test(message)
   const isStatusRequest = Boolean(requestedPipeline) && /\b(status|results?|running|logs?)\b/i.test(message)
 
