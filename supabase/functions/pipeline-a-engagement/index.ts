@@ -329,14 +329,15 @@ async function classifyComment(
     system: `You are a comment classifier for a social media engagement system.
 
 Classify the comment into exactly one intent:
-- spam: promotional content, suspicious links, fake accounts, unsolicited advertising
-- complaint: negative service experience, payment issues, strong accusations of wrongdoing
+- spam: promotional content, unsolicited external links, fake accounts, unsolicited advertising
+- complaint: negative service experience, payment issues, strong accusations directed at THIS organisation
 - boost: strong advocacy, success stories, viral-sharing potential, testimonials
 - routine: questions, general engagement, requests for information, neutral feedback
 
-Key disambiguation rules:
-- Classify as SPAM if the author is promoting an external product or service, posting unsolicited links (bit.ly, tinyurl, or any shortened URL), or using bot-like patterns — even if the URL or text contains words like "scam", "fraud", or "fake". The word "scam" in a link does not make it a complaint.
-- Classify as COMPLAINT only if a real customer is describing a negative experience with THIS organisation's own products, services, or staff. The author must be a genuine customer, not a promoter.
+Key disambiguation rules (apply before classifying):
+- SPAM: the author is running a promotion — look for unsolicited external links (shortened URLs like bit.ly or tinyurl, or any URL not belonging to this org), emoji-heavy sales pitches, money/prize claims, or bot patterns. Classify as spam if an unsolicited link is present, regardless of words in the URL itself (e.g. "bit.ly/scam123" is a spam link even though the URL contains "scam").
+- COMPLAINT: a genuine user is venting frustration about THIS organisation — they reference a payment they made, a service failure, or a broken promise. The word "scam" or "fraud" in the comment text does NOT make it spam; it can be a customer expressing betrayal ("I paid and got nothing, this is a scam!"). No promotional link is present.
+- The dividing line: does the author have a link or product to push? → SPAM. Does the author have a personal grievance about this org's service? → COMPLAINT.
 
 Context about the organisation:
 - Tone: ${brandVoice.tone ?? 'professional'}
@@ -369,8 +370,6 @@ async function draftReply(
   comment: ClassifiedComment,
   brandVoice: any,
 ): Promise<string> {
-  const firstName = comment.author.split(' ')[0]
-
   const intentGuidance: Record<Intent, string> = {
     complaint: 'Acknowledge their frustration with genuine empathy. Invite them to DM for a resolution. Do not be defensive.',
     boost: 'Express sincere appreciation for their advocacy. Reinforce the brand mission. Encourage sharing.',
@@ -391,7 +390,7 @@ Brand voice:
 ${brandVoice.good_post_example ? `\nGood example post: "${brandVoice.good_post_example}"` : ''}
 
 Rules:
-- Address the person by first name (${firstName})
+- The commenter's name is "${comment.author}". If it looks like a real given name (e.g. "Chanda Mwale" → address as "Chanda"), use the first name. If the name appears to be a handle or descriptor (e.g. "Angry Student", "User123"), open with "Hi there" or another warm neutral greeting instead.
 - Maximum 2 sentences
 - No hashtags
 - Plain conversational text only`,
@@ -409,7 +408,7 @@ Write the reply:`,
     ],
   })
 
-  const reply = response.content[0].type === 'text' ? response.content[0].text.trim() : `Hi ${firstName}, thanks for reaching out — please DM us for more details.`
+  const reply = response.content[0].type === 'text' ? response.content[0].text.trim() : `Hi there, thanks for reaching out — please DM us for more details.`
   return reply
 }
 
