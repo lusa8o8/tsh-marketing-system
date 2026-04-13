@@ -39,6 +39,7 @@ export default function AgentSettings() {
   const [visualData, setVisualData] = useState<any>({});
   const [kpiData, setKpiData] = useState<any>({});
   const [pipelineData, setPipelineData] = useState<any>({});
+  const [facebookCredentials, setFacebookCredentials] = useState({ page_id: "", access_token: "" });
 
   const initialized = useRef(false);
 
@@ -59,6 +60,10 @@ export default function AgentSettings() {
         primary_cta_url: config.primary_cta_url ?? "",
       });
       setKpiData(config.kpi_targets);
+      setFacebookCredentials({
+        page_id: String((config.platform_connections as Record<string, any>)?.facebook?.page_id ?? ""),
+        access_token: String((config.platform_connections as Record<string, any>)?.facebook?.access_token ?? ""),
+      });
       setPipelineData(config.pipeline_config);
       initialized.current = true;
     }
@@ -98,6 +103,41 @@ export default function AgentSettings() {
       }
     );
   }
+
+  function handleSaveFacebookCredentials() {
+    const existing = (config.platform_connections ?? {}) as Record<string, any>;
+    const updated = {
+      ...existing,
+      facebook: {
+        ...(existing.facebook ?? {}),
+        connected: true,
+        connected_at: existing.facebook?.connected_at ?? new Date().toISOString(),
+        page_id: facebookCredentials.page_id.trim(),
+        access_token: facebookCredentials.access_token.trim(),
+      },
+    };
+
+    updateMutation.mutate(
+      { data: { platform_connections: updated } },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: getGetOrgConfigQueryKey() });
+          toast({
+            title: "Facebook credentials saved",
+            description: "Page publishing credentials updated.",
+          });
+        },
+        onError: (err) => {
+          toast({
+            title: "Save failed",
+            description: (err as Error).message ?? "Could not save Facebook credentials.",
+            variant: "destructive",
+          });
+        },
+      }
+    );
+  }
+
 
   const handleSave = (sectionKey: string, data: any) => {
     const payload = { [sectionKey]: data };
@@ -476,30 +516,69 @@ export default function AgentSettings() {
                 </div>
               </AccordionTrigger>
               <AccordionContent className="px-4 pb-6 pt-2">
-                <div className="mb-4 flex items-center justify-center rounded-md border border-dashed bg-muted/30 p-3 text-xs text-muted-foreground">
-                  API credentials are managed securely in the backend and never displayed here.
+                <div className="mb-4 rounded-md border border-dashed bg-muted/30 p-3 text-xs text-muted-foreground">
+                  Facebook publishing credentials for `M13A` can be stored here. Other live providers remain toggle-only until their milestone slices.
                 </div>
 
                 <div className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/60">Active channels</div>
                 <div className="mb-5 space-y-2">
                   {INTEGRATIONS.filter((p) => p.live).map(({ id, name, Icon, color }) => {
                     const isConnected = !!config.platform_connections[id];
+                    const isFacebook = id === "facebook";
+                    const hasFacebookCredentials = !!facebookCredentials.page_id && !!facebookCredentials.access_token;
                     return (
-                      <div key={id} className="flex items-center justify-between rounded-lg border bg-background p-3">
-                        <div className="flex items-center gap-3">
-                          <Icon style={{ color }} className="h-5 w-5 shrink-0" />
-                          <span className="text-sm font-medium">{name}</span>
-                          {isConnected ? (
-                            <Badge variant="outline" className="h-5 border-green-200 bg-green-50 px-1.5 text-[10px] text-green-700">Connected</Badge>
-                          ) : (
-                            <Badge variant="outline" className="h-5 px-1.5 text-[10px] text-muted-foreground">Not connected</Badge>
-                          )}
+                      <div key={id} className="rounded-lg border bg-background">
+                        <div className="flex items-center justify-between p-3">
+                          <div className="flex items-center gap-3">
+                            <Icon style={{ color }} className="h-5 w-5 shrink-0" />
+                            <span className="text-sm font-medium">{name}</span>
+                            {isConnected ? (
+                              <Badge variant="outline" className="h-5 border-green-200 bg-green-50 px-1.5 text-[10px] text-green-700">Connected</Badge>
+                            ) : (
+                              <Badge variant="outline" className="h-5 px-1.5 text-[10px] text-muted-foreground">Not connected</Badge>
+                            )}
+                            {isFacebook && isConnected && !hasFacebookCredentials ? (
+                              <Badge variant="outline" className="h-5 border-amber-200 bg-amber-50 px-1.5 text-[10px] text-amber-700">Credentials needed</Badge>
+                            ) : null}
+                          </div>
+                          <Switch
+                            checked={isConnected}
+                            disabled={updateMutation.isPending}
+                            onCheckedChange={() => handleToggleConnection(id, isConnected)}
+                          />
                         </div>
-                        <Switch
-                          checked={isConnected}
-                          disabled={updateMutation.isPending}
-                          onCheckedChange={() => handleToggleConnection(id, isConnected)}
-                        />
+
+                        {isFacebook && isConnected ? (
+                          <div className="border-t bg-muted/20 px-3 pb-3 pt-3">
+                            <p className="mb-3 text-[11px] text-muted-foreground">Enter the Facebook Page ID and Page Access Token used for live publishing.</p>
+                            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                              <div className="space-y-1.5">
+                                <Label className="text-[11px]">Page ID</Label>
+                                <Input
+                                  value={facebookCredentials.page_id}
+                                  onChange={(e) => setFacebookCredentials((current) => ({ ...current, page_id: e.target.value }))}
+                                  placeholder="123456789012345"
+                                  className="h-8 text-xs"
+                                />
+                              </div>
+                              <div className="space-y-1.5">
+                                <Label className="text-[11px]">Page Access Token</Label>
+                                <Input
+                                  type="password"
+                                  value={facebookCredentials.access_token}
+                                  onChange={(e) => setFacebookCredentials((current) => ({ ...current, access_token: e.target.value }))}
+                                  placeholder="EAAG..."
+                                  className="h-8 text-xs"
+                                />
+                              </div>
+                            </div>
+                            <div className="mt-3 flex justify-end">
+                              <Button size="sm" variant="outline" className="h-8 text-xs" onClick={handleSaveFacebookCredentials} disabled={updateMutation.isPending}>
+                                <Save className="mr-1.5 h-3.5 w-3.5" /> Save Facebook credentials
+                              </Button>
+                            </div>
+                          </div>
+                        ) : null}
                       </div>
                     );
                   })}

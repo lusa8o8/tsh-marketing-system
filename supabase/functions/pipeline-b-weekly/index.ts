@@ -9,6 +9,7 @@ import Anthropic from 'https://esm.sh/@anthropic-ai/sdk@0.27.0'
 import { getAgentDefinition } from '../_shared/agent-registry.ts'
 import { getIntegrationDefinition } from '../_shared/integration-registry.ts'
 import { PIPELINE_RUN_STATUS } from '../_shared/pipeline-run-status.ts'
+import { publishDueContentRows } from '../_shared/publish-content.ts'
 
 // ── types ─────────────────────────────────────────────────────────────
 interface NewContent {
@@ -410,12 +411,15 @@ async function resumePipelineBRun(params: {
 
     const now = Date.now()
     const duePosts = approvedDrafts.filter((row: any) => !row.scheduled_at || new Date(row.scheduled_at).getTime() <= now)
-    for (const post of duePosts) {
-      await supabase
-        .from('content_registry')
-        .update({ status: 'published', published_at: new Date().toISOString() })
-        .eq('id', post.id)
-      results.posts_published += 1
+    const publishSummary = await publishDueContentRows({
+      supabase,
+      rows: duePosts,
+      claimPrefix: `pipeline-b:${runId}`,
+    })
+
+    results.posts_published += publishSummary.published
+    for (const failed of publishSummary.results.filter((row) => row.outcome === 'failed')) {
+      results.errors.push(`${failed.platform}: ${failed.error}`)
     }
 
     if (!results.ambassador_update_sent) {
@@ -701,3 +705,4 @@ function getScheduledTime(day: string, today: string): string {
   scheduled.setHours(9, 0, 0, 0)
   return scheduled.toISOString()
 }
+

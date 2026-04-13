@@ -35,7 +35,7 @@ export const INTEGRATION_REGISTRY = {
     label: 'Facebook',
     kind: 'social',
     capabilities: ['fetch_comments', 'post_reply', 'publish_post', 'post_poll', 'fetch_metrics'],
-    mocked: true,
+    mocked: false,
     enabled_by_capability: 'facebook_enabled',
     // Tuesday + Thursday — peak engagement days for educational content in SSA markets.
     // Two posts per campaign: launch blast on day 0 + one sustaining post mid-window.
@@ -112,3 +112,4 @@ export const INTEGRATION_REGISTRY = {
 export function getIntegrationDefinition(integrationKey: keyof typeof INTEGRATION_REGISTRY) {
   return INTEGRATION_REGISTRY[integrationKey]
 }
+
