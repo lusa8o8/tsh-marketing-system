@@ -109,11 +109,14 @@ Use `SAMM_IMPLEMENTATION_ROADMAP.md` as the detailed checklist. Current pending 
 - `M12A`: verify manual page load, accordion behavior, sidebar link, and mobile rendering
 
 ## Milestone Queue
-- `M13`: Live Platform Publishing - NEXT
-  - Start with Facebook Graph API
-  - One provider family per stable commit
+- `M13A`: Facebook Live Publishing - NEXT stable checkpoint
+  - Facebook remains the first end-to-end verified slice
   - On success write `content_registry.status = 'published'` and `published_at`
   - On failure set `status = 'failed'` and log the reason in `metadata`
+- `M13B`: WhatsApp live publishing
+- `M13C`: YouTube live publishing
+- `M13D`: Email live publishing
+- parallel scaffolding for `M13B/M13C/M13D` is allowed, but verification and stable commits remain provider-by-provider
 - `M14`: Multi-channel samm access
 - `M15`: Voice interface
 - `M16`: Dashless operation
@@ -177,4 +180,5 @@ Rule of thumb:
 - Do not do a broad `samm` workspace redesign.
 - Keep the product professional and restrained.
 - Keep scope narrow and milestone-shaped.
-- For `M13`, do one provider family per stable commit. Do not batch Facebook, WhatsApp, YouTube, and email into one unverified slice.
+- For `M13A-M13D`, keep stable checkpoints provider-by-provider. Parallel scaffolding is allowed, but do not collapse Facebook, WhatsApp, YouTube, and email into one unverified commit.
+

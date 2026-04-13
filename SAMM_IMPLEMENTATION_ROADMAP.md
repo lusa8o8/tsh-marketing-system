@@ -1186,40 +1186,94 @@ Commit policy:
 ## Milestone 13: Live Platform Publishing
 Status:
 - planned
-- depends on M11E (brand_visual injected into briefs) and M11F (cadence policy baked in) — both complete
-- must be one provider family per release — never batch all live integrations
+- depends on M11E (brand_visual injected into briefs) and M11F (cadence policy baked in) � both complete
+- delivery is split into `M13A` through `M13D`
 
 Goal:
 - replace mock publish actions with real platform API calls behind the existing adapter interfaces
-- no scheduler or runtime rewrite required — adapters swap mocks for real calls
+- no scheduler or runtime rewrite required � adapters swap mocks for real calls
 - drafted + approved content in Content Registry publishes to live platforms on scheduled_at time
 
-Scope:
-- Supabase cron job: poll `content_registry` for rows where `status = 'approved'` and `scheduled_at <= now()` → publish
-- Publish adapters (one per release):
-  - Facebook Graph API — page post publish
-  - WhatsApp Business API — broadcast or status update
-  - YouTube Data API — community post
-  - email provider (SendGrid) — campaign send
-- On publish success: update `content_registry.status = 'published'`, set `published_at`
-- On publish failure: update `status = 'failed'`, log error to `content_registry.metadata`
+Locked delivery rules:
+- verification remains one provider family at a time
+- `M13A` Facebook is the first end-to-end checkpoint and the first browser/live verification target
+- implementation scaffolding for later adapters may be built in parallel to speed production
+- parallel scaffolding does not change the stable commit rule: no mixed multi-provider checkpoint commits
 
-Do not include in first release:
-- Analytics pull-back from live platforms (separate milestone)
-- A/B publish variants
-- Retry queue (handle in v2)
+Shared M13 foundation:
+- Supabase cron job: poll `content_registry` for rows where `status = 'approved'` or `status = 'scheduled'` and `scheduled_at <= now()` -> publish
+- shared publish state contract:
+  - on success: update `content_registry.status = 'published'`, set `published_at`
+  - on failure: update `status = 'failed'`, log error to `content_registry.metadata`
+- shared publisher runner may exist before all adapters are live, but each adapter must be verified independently
+
+### M13A: Facebook Live Publishing
+Goal:
+- first real end-to-end live publish path
+
+Scope:
+- publish approved/scheduled Facebook rows via Facebook Graph API page post publish
+- minimal credential path for Facebook in Settings or org config
+- scheduled publisher function/runner calls Facebook adapter first for the verified slice
 
 Verification:
-- Approved Facebook draft publishes to the connected page on schedule
-- published_at timestamp set in Content Registry after successful publish
-- Failed publish sets status: failed with error logged in metadata
-- No double-publish: cron does not re-process already-published rows
+- approved Facebook draft publishes to the connected page on schedule
+- `published_at` timestamp is set in Content Registry after successful publish
+- failed Facebook publish sets `status = 'failed'` with error logged in `metadata`
+- no double-publish: cron does not re-process already-published rows
 
 Commit policy:
-- migration for publish columns (published_at, failure reason) first
-- one provider adapter per stable commit — never batch multiple live APIs
+- migration for publish columns first if still needed
+- one stable Facebook checkpoint commit after end-to-end verification
+
+### M13B: WhatsApp Live Publishing
+Goal:
+- add WhatsApp Business API publishing after Facebook is stable
+
+Scope:
+- WhatsApp Business API send path
+- credentials/config for WhatsApp delivery
+
+Verification:
+- approved WhatsApp draft/message sends to the configured destination
+- success/failure state follows the shared publish state contract
+
+### M13C: YouTube Live Publishing
+Goal:
+- add YouTube community post publishing after Facebook is stable
+
+Scope:
+- YouTube Data API community post path
+- required OAuth/token handling for the supported use case
+
+Verification:
+- approved YouTube draft publishes successfully
+- success/failure state follows the shared publish state contract
+
+### M13D: Email Live Publishing
+Goal:
+- add email provider publishing after Facebook is stable
+
+Scope:
+- SendGrid campaign/send path
+- sender + recipient config for email delivery
+
+Verification:
+- approved email draft sends successfully
+- success/failure state follows the shared publish state contract
+
+Do not include in M13A:
+- analytics pull-back from live platforms (separate milestone)
+- A/B publish variants
+- retry queue (handle in v2)
+- one giant multi-provider release
+
+Parallel implementation note:
+- adapter scaffolds for M13B/M13C/M13D may be built in parallel while M13A is under active verification
+- docs and commit history must still keep Facebook-first as the stable milestone path
 
 ---
+
 
 ## Milestone 14: Multi-Channel Samm Access
 Status:
@@ -1338,7 +1392,7 @@ Reason:
 Milestones M11A through M11F and M12 are complete. All brand, scheduling, and one-off post infrastructure is in place.
 
 Next highest-leverage work:
-1. **M13 Live Platform Publishing** — run the first real post from Content Registry to a live platform. Start with Facebook Graph API (most documented, most used channel). One provider per stable commit.
+1. **M13A Facebook Live Publishing** � first verified live publish path. Facebook remains the first stable checkpoint; adapter scaffolds for M13B/M13C/M13D may be built in parallel, but verification and stable commits remain provider-by-provider.
 2. **Canva AI close-the-loop test** — run a campaign with brand_visual + social handles filled in Settings → verify Canva AI completes a design without follow-up questions.
 3. **Pending test queue** — work through the ⬜ items in the Test Status section above; update each to ✅ as verified.
 
@@ -1366,3 +1420,4 @@ The roadmap is intentionally conservative:
 - bring onboarding, billing, and live APIs in only after the execution core is reliable
 
 That is the boringly effective path to the full agent system.
+
