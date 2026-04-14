@@ -5,9 +5,11 @@ import {
   invokePipeline,
   resolveExplicitSchedulerRequest,
   resolveModelPipelineAction,
+  resolveNormalizedWritePostIntent,
   type CalendarEventContext,
   type ChatHistoryItem,
   type ChatResponse,
+  type NormalizedWritePostIntent,
 } from './scheduler.ts'
 
 type ChatRole = 'user' | 'coordinator'
@@ -97,6 +99,84 @@ function summarizeInbox(rows: any[]) {
     priority: row.priority,
     created_at: row.created_at,
   }))
+}
+
+function isGreeting(message: string) {
+  const normalized = message.toLowerCase().trim()
+  return /^(hi|hello|hey|yo)\b/.test(normalized)
+}
+
+function isPipelineDCommand(message: string) {
+  return /^(run|start|trigger)\s+pipeline\s*d\b/i.test(message.trim())
+}
+
+function buildPipelineDGuidanceResponse(): ChatResponse {
+  return {
+    message: 'Pipeline D writes one-off posts, but it needs a topic. Tell me what to write about, for example: "write a post about discounts" or "draft a Facebook post about our grand opening".',
+    suggestions: ['Write a post about discounts', 'Draft a Facebook post about our grand opening', 'Check Content Registry'],
+    invoked_action: {
+      type: 'run_pipeline',
+      pipeline: 'pipeline-d-post',
+      status: 'queued',
+      run_id: null,
+    },
+  }
+}
+
+function buildGreetingResponse(orgName: string, upcomingEvents: Array<{ label?: string; event_date?: string }>, pendingCount: number): ChatResponse {
+  const nextEvent = upcomingEvents[0]
+  const eventNote = nextEvent?.label && nextEvent?.event_date
+    ? ` I see you have ${nextEvent.label} coming up on ${nextEvent.event_date}.`
+    : ''
+  const approvalNote = pendingCount > 0
+    ? ` There ${pendingCount === 1 ? 'is' : 'are'} ${pendingCount} item${pendingCount === 1 ? '' : 's'} waiting for approval.`
+    : ' There is nothing waiting for approval right now.'
+
+  return {
+    message: `Hello! I'm samm, your coordinating intelligence for ${orgName}.${approvalNote}${eventNote}`,
+    suggestions: DEFAULT_SUGGESTIONS,
+  }
+}
+
+function buildWritePostResponse(
+  supabase: any,
+  orgId: string,
+  intent: NormalizedWritePostIntent,
+  message?: string,
+): ChatResponse {
+  const postBody: Record<string, unknown> = { topic: intent.topic }
+  if (Array.isArray(intent.platforms) && intent.platforms.length > 0) {
+    postBody.platforms = intent.platforms
+  }
+  if (intent.event_ref) {
+    postBody.event_ref = String(intent.event_ref)
+  }
+
+  const postTask = invokePipeline(supabase, 'pipeline-d-post', orgId, postBody)
+    .catch((err: unknown) => {
+      console.error('Pipeline D background invocation failed:', err instanceof Error ? err.message : String(err))
+    })
+
+  try {
+    EdgeRuntime.waitUntil(postTask)
+  } catch {
+    // EdgeRuntime not available outside Supabase - promise still runs
+  }
+
+  const platformNote = Array.isArray(intent.platforms) && intent.platforms.length > 0
+    ? ` for ${intent.platforms.join(', ')}`
+    : ''
+
+  return {
+    message: message || `Writing a post about "${intent.topic}"${platformNote} now - drafts will appear in Content Registry in a few seconds.`,
+    suggestions: ['Check Content Registry', 'What needs my approval?', 'Summarize this week'],
+    invoked_action: {
+      type: 'run_pipeline',
+      pipeline: 'pipeline-d-post',
+      status: 'running',
+      run_id: null,
+    },
+  }
 }
 
 function sleep(ms: number) {
@@ -259,6 +339,19 @@ Deno.serve(async (req) => {
       return jsonResponse(explicitSchedulerResult)
     }
 
+
+    const normalizedWritePost = resolveNormalizedWritePostIntent(message)
+    if (normalizedWritePost) {
+      return jsonResponse(buildWritePostResponse(supabase, orgId, normalizedWritePost))
+    }
+
+    if (isPipelineDCommand(message)) {
+      return jsonResponse(buildPipelineDGuidanceResponse())
+    }
+
+    if (isGreeting(message)) {
+      return jsonResponse(buildGreetingResponse(orgConfig?.org_name ?? 'this workspace', upcomingEvents, pendingCount))
+    }
     const prompt = {
       workspace: {
         org_name: orgConfig?.org_name ?? 'this workspace',
@@ -426,41 +519,19 @@ Rules:
         return jsonResponse({ message: "I couldn't work out what to write about. Could you be more specific?", suggestions })
       }
 
-      const postBody: Record<string, unknown> = { topic }
-      if (Array.isArray(action.platforms) && action.platforms.length > 0) {
-        postBody.platforms = action.platforms
-      }
-      if (action.event_ref) {
-        postBody.event_ref = String(action.event_ref)
-      }
-
-      // Fire pipeline-d in the background — it completes in a few seconds.
-      // The user will see drafts appear in Content Registry shortly after.
-      const postTask = invokePipeline(supabase, 'pipeline-d-post', orgId, postBody)
-        .catch((err: unknown) => {
-          console.error('Pipeline D background invocation failed:', err instanceof Error ? err.message : String(err))
-        })
-
-      try {
-        EdgeRuntime.waitUntil(postTask)
-      } catch {
-        // EdgeRuntime not available outside Supabase — promise still runs
-      }
-
-      const platformNote = Array.isArray(action.platforms) && action.platforms.length > 0
-        ? ` for ${action.platforms.join(', ')}`
-        : ''
-
-      return jsonResponse({
-        message: parsed.message || `Writing a post about "${topic}"${platformNote} now — drafts will appear in Content Registry in a few seconds.`,
-        suggestions: ['Check Content Registry', 'What needs my approval?', 'Summarize this week'],
-        invoked_action: {
-          type: 'run_pipeline',
-          pipeline: 'pipeline-d-post',
-          status: 'running',
-          run_id: null,
-        },
-      })
+      return jsonResponse(
+        buildWritePostResponse(
+          supabase,
+          orgId,
+          {
+            type: 'write_post',
+            topic,
+            platforms: Array.isArray(action.platforms) ? action.platforms : null,
+            event_ref: action.event_ref ? String(action.event_ref) : null,
+          },
+          parsed.message,
+        ),
+      )
     }
 
     const modelSchedulerResult = await resolveModelPipelineAction({

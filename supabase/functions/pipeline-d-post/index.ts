@@ -77,7 +77,7 @@ async function runCanonicalCopy(
 ): Promise<{ headline: string; core_body: string; exact_cta: string; key_fact: string }> {
 
   const response = await anthropic.messages.create({
-    model: 'claude-sonnet-4-6',
+    model: 'claude-sonnet-4-20250514',
     max_tokens: 300,
     system: `${buildSystemPrompt(brandVoice)}
 
@@ -124,7 +124,7 @@ async function runPlatformAdapters(
     .map(async (platform) => {
       try {
         const response = await anthropic.messages.create({
-          model: 'claude-sonnet-4-6',
+          model: 'claude-sonnet-4-20250514',
           max_tokens: 200,
           system: `${buildSystemPrompt(brandVoice)}
 

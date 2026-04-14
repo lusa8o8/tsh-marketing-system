@@ -432,3 +432,8 @@ enabled = true
 verify_jwt = false
 entrypoint = "./functions/publish-scheduled/index.ts"
 
+[functions.pipeline-d-post]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/pipeline-d-post/index.ts"
+

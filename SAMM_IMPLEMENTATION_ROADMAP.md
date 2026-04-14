@@ -1299,6 +1299,23 @@ Verification:
 - obvious one-off post prompts (`write`, `draft`, `create a post`) resolve to the same intent
 - coordinator no longer depends on exact phrasing for simple operational commands
 
+Current implementation/progress snapshot (2026-04-14):
+- deterministic greeting handling is working in browser for `hi`, `hello`, `yo`, and similar small variants
+- broadened write-post normalization is verified for conversational prompts like `can you draft me a quick post about our grand opening?` and `i need a post about discounts`
+- `pipeline-d-post` was fixed and redeployed:
+  - stale Anthropic model ids updated to `claude-sonnet-4-20250514`
+  - explicit `pipeline-d-post` declaration added to `supabase/config.toml`
+- Supabase verification shows:
+  - `pipeline-d-post` now returns `200`
+  - logs show `4 platform drafts produced` and successful completion into Content Registry
+- remaining gap is no longer backend failure; it is product polish:
+  - explicit `run pipeline d` alias handling is still missing
+  - Operations UI still under-represents Pipeline D because it intentionally creates no `pipeline_runs` row
+
+Next narrow fix:
+- add deterministic `run pipeline d` guidance in `coordinator-chat`
+- add lightweight Pipeline D last-run visibility in Operations without introducing `pipeline_runs`
+
 ### M13F: Platform Compliance + Official App Onboarding Foundation
 Goal:
 - prepare `samm` to offer production-grade official platform connections instead of ad hoc manual token entry
@@ -1481,6 +1498,7 @@ The roadmap is intentionally conservative:
 - bring onboarding, billing, and live APIs in only after the execution core is reliable
 
 That is the boringly effective path to the full agent system.
+
 
 
 

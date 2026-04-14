@@ -770,14 +770,26 @@ export function useGetPipelinesStatus(options?: QueryHookOptions) {
   return useQuery({
     queryKey: options?.query?.queryKey ?? ["pipeline-status", getOrgId()],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("pipeline_runs")
-        .select("*")
-        .eq("org_id", getOrgId())
-        .order("started_at", { ascending: false })
-        .limit(40);
+      const [{ data, error }, { data: pipelineDRow, error: pipelineDError }] = await Promise.all([
+        supabase
+          .from("pipeline_runs")
+          .select("*")
+          .eq("org_id", getOrgId())
+          .order("started_at", { ascending: false })
+          .limit(40),
+        supabase
+          .from("content_registry")
+          .select("id, created_at, updated_at, status, created_by")
+          .eq("org_id", getOrgId())
+          .eq("created_by", "pipeline-d-post")
+          .eq("is_campaign_post", false)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+      ]);
 
       if (error) throw error;
+      if (pipelineDError) throw pipelineDError;
 
       const latest: Record<string, any> = {};
       for (const row of data ?? []) {
@@ -785,18 +797,27 @@ export function useGetPipelinesStatus(options?: QueryHookOptions) {
         if (!latest[key]) latest[key] = row;
       }
 
+      const pipelineDStatus = latest.pipeline_d ?? (pipelineDRow
+        ? {
+            pipeline: 'pipeline_d',
+            status: pipelineDRow.status === 'failed' ? 'failed' : 'success',
+            started_at: pipelineDRow.created_at,
+            updated_at: pipelineDRow.updated_at,
+            result_summary: 'Recent one-off drafts created',
+          }
+        : undefined);
+
       return {
         coordinator: formatPipelineStatus("coordinator", latest.coordinator),
         pipeline_a: formatPipelineStatus("pipeline_a", latest.pipeline_a),
         pipeline_b: formatPipelineStatus("pipeline_b", latest.pipeline_b),
         pipeline_c: formatPipelineStatus("pipeline_c", latest.pipeline_c),
-        pipeline_d: formatPipelineStatus("pipeline_d", latest.pipeline_d),
+        pipeline_d: formatPipelineStatus("pipeline_d", pipelineDStatus),
       };
     },
     ...options?.query,
   });
 }
-
 function formatPipelineStatus(key: string, row?: any) {
   return {
     pipeline: key,
@@ -822,10 +843,22 @@ export function useListPipelineRuns(params: PipelineRunsFilter = {}, options?: Q
 
       if (params.limit) query = query.limit(params.limit);
 
-      const { data, error } = await query;
-      if (error) throw error;
+      const [{ data, error }, { data: pipelineDRows, error: pipelineDError }] = await Promise.all([
+        query,
+        supabase
+          .from("content_registry")
+          .select("id, created_at, updated_at, status, created_by")
+          .eq("org_id", getOrgId())
+          .eq("created_by", "pipeline-d-post")
+          .eq("is_campaign_post", false)
+          .order("created_at", { ascending: false })
+          .limit(3),
+      ]);
 
-      return (data ?? []).map((row) => ({
+      if (error) throw error;
+      if (pipelineDError) throw pipelineDError;
+
+      const baseRuns = (data ?? []).map((row) => ({
         ...row,
         pipeline: toPipelineKey(row.pipeline),
         started_at: row.started_at ?? row.created_at,
@@ -833,11 +866,28 @@ export function useListPipelineRuns(params: PipelineRunsFilter = {}, options?: Q
         result_summary: summarizeRun(row),
         error_message: row.error_message ?? row.result?.error ?? null,
       }));
+
+      const syntheticPipelineDRuns = (pipelineDRows ?? []).map((row) => ({
+        id: `pipeline-d-${row.id}`,
+        pipeline: 'pipeline_d',
+        status: row.status === 'failed' ? 'failed' : 'success',
+        started_at: row.created_at,
+        created_at: row.created_at,
+        updated_at: row.updated_at,
+        duration_seconds: calculateDurationSeconds(row) ?? 0,
+        result_summary: row.status === 'failed' ? 'One-off post failed' : 'Recent one-off drafts created',
+        error_message: row.status === 'failed' ? 'One-off post failed' : null,
+        result: null,
+      }));
+
+      const mergedRuns = [...syntheticPipelineDRuns, ...baseRuns]
+        .sort((a, b) => new Date(b.started_at).getTime() - new Date(a.started_at).getTime());
+
+      return params.limit ? mergedRuns.slice(0, params.limit) : mergedRuns;
     },
     ...options?.query,
   });
 }
-
 export function useGetOrgConfig(options?: QueryHookOptions) {
   return useQuery({
     queryKey: options?.query?.queryKey ?? getGetOrgConfigQueryKey(),

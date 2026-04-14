@@ -207,6 +207,24 @@ Rule of thumb:
 - The Honey Shop app/token path still needs a Page token with working post-publish permission.
 - Meta may require the official app/use-case path and possibly business verification for production-grade page publishing.
 
+## Current M13E Diagnosis
+- The deterministic greeting layer is working in browser for `hi`, `hello`, `yo`, and similar small variants.
+- The broadened write-post matcher is now verified for conversational one-off prompts like:
+  - `can you draft me a quick post about our grand opening?`
+  - `i need a post about discounts`
+- `pipeline-d-post` was fixed and redeployed:
+  - stale Anthropic model ids were updated to `claude-sonnet-4-20250514`
+  - `pipeline-d-post` was added to `supabase/config.toml`
+- Browser + Supabase verification now shows:
+  - `coordinator-chat` returns deterministic Pipeline D responses for conversational one-off post prompts
+  - `pipeline-d-post` returns `200`
+  - Supabase logs show `4 platform drafts produced` and `Pipeline D complete: 4 drafts in Content Registry`
+  - Honey Shop Content Registry is populated with the resulting drafts
+- Remaining M13E follow-up is narrower than the original blocker:
+  - Operations UI is still mostly driven by `pipeline_runs`, so Pipeline D remains under-visible in the app because it intentionally creates no `pipeline_runs` row
+  - explicit command alias handling for `run pipeline d` is still missing, so that phrasing can still fall through to the LLM path instead of returning a deterministic guided response
+- Next narrow fix: add deterministic `run pipeline d` guidance and lightweight Pipeline D last-run visibility in Operations without introducing `pipeline_runs` for Pipeline D.
+
 ## Landing Page / Compliance Note
 - Add landing page requirements to the `M13` series as part of `M13F`.
 - Minimum assets to prepare:
@@ -223,6 +241,7 @@ Rule of thumb:
 - Keep the product professional and restrained.
 - Keep scope narrow and milestone-shaped.
 - For `M13A-M13D`, keep stable checkpoints provider-by-provider. Parallel scaffolding is allowed, but do not collapse Facebook, WhatsApp, YouTube, and email into one unverified commit.
+
 
 
 

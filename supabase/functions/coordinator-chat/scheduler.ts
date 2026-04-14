@@ -42,6 +42,13 @@ export type ChatResponse = {
   } | null
 }
 
+export type NormalizedWritePostIntent = {
+  type: 'write_post'
+  topic: string
+  platforms: string[] | null
+  event_ref: string | null
+}
+
 export type PipelineTarget = {
   id: string
   title: string
@@ -81,6 +88,77 @@ type ModelSchedulerParams = {
   fallbackMessage: string
   suggestions: string[]
   eventContext?: CalendarEventContext
+}
+
+const PLATFORM_NORMALIZERS: Array<{ keywords: string[]; platform: string }> = [
+  { keywords: ['facebook', 'fb'], platform: 'facebook' },
+  { keywords: ['whatsapp', 'wa'], platform: 'whatsapp' },
+  { keywords: ['youtube', 'yt'], platform: 'youtube' },
+  { keywords: ['email', 'mail', 'newsletter'], platform: 'email' },
+]
+
+function extractWritePostTopic(message: string) {
+  const normalized = message
+    .replace(/\s+/g, ' ')
+    .trim()
+
+  const patterns = [
+    /\b(?:write|draft|create|make)\s+(?:me\s+)?(?:a|an)?\s*(?:quick\s+|short\s+|simple\s+)?(?:facebook|whatsapp|youtube|email)?\s*(?:post|message|email|newsletter)\s+about\s+(.+)$/i,
+    /\b(?:can you|could you|please)?\s*(?:write|draft|create|make)\s+(?:me\s+)?(?:a|an)?\s*(?:quick\s+|short\s+|simple\s+)?(?:facebook|whatsapp|youtube|email)?\s*(?:post|message|email|newsletter)\s+about\s+(.+)$/i,
+    /\b(?:i need|we need|need)\s+(?:a|an)?\s*(?:quick\s+|short\s+|simple\s+)?(?:facebook|whatsapp|youtube|email)?\s*(?:post|message|email|newsletter)\s+about\s+(.+)$/i,
+    /\bhelp me\s+(?:write|draft|create|make)\s+(?:a|an)?\s*(?:quick\s+|short\s+|simple\s+)?(?:facebook|whatsapp|youtube|email)?\s*(?:post|message|email|newsletter)\s+about\s+(.+)$/i,
+    /\b(?:write|draft|create|make)\s+(?:a|an)?\s*(?:post|message|email|newsletter)\s+for\s+(.+)$/i,
+    /\b(?:write|draft|create|make)\s+about\s+(.+)$/i,
+  ]
+
+  for (const pattern of patterns) {
+    const match = normalized.match(pattern)
+    if (match?.[1]) {
+      return match[1].trim().replace(/[.?!]+$/, '')
+    }
+  }
+
+  return ''
+}
+
+function extractRequestedPlatforms(message: string) {
+  const normalized = message.toLowerCase()
+  const matched = PLATFORM_NORMALIZERS
+    .filter(({ keywords }) => keywords.some((keyword) => normalized.includes(keyword)))
+    .map(({ platform }) => platform)
+
+  return matched.length > 0 ? Array.from(new Set(matched)) : null
+}
+
+export function resolveNormalizedWritePostIntent(message: string): NormalizedWritePostIntent | null {
+  const normalized = message.toLowerCase().trim()
+  const startsLikeWritePost =
+    (/(?:\bwrite\b|\bdraft\b|\bcreate\b|\bmake\b)/.test(normalized) || /\b(i need|we need|need|help me)\b/.test(normalized)) &&
+    /\b(post|message|email|newsletter)\b/.test(normalized)
+
+  if (!startsLikeWritePost) {
+    return null
+  }
+
+  if (normalized.includes('campaign')) {
+    return null
+  }
+  if (normalized.includes('calendar') || normalized.includes('schedule') || normalized.includes('event')) {
+    return null
+  }
+
+
+  const topic = extractWritePostTopic(message)
+  if (!topic) {
+    return null
+  }
+
+  return {
+    type: 'write_post',
+    topic,
+    platforms: extractRequestedPlatforms(message),
+    event_ref: null,
+  }
 }
 
 export function inferPipelineTarget(text: string): PipelineTarget | null {
@@ -471,3 +549,4 @@ export async function resolveModelPipelineAction(params: ModelSchedulerParams): 
     },
   }
 }
+
