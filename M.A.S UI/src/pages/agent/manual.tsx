@@ -106,9 +106,10 @@ export default function OperationsManual() {
 
             <Section title="Quick posts">
               <div className="space-y-2 text-sm">
-                <div><Cmd>write a post about the upcoming orientation week</Cmd> â€” writes drafts for all four platforms (Facebook, WhatsApp, YouTube, Email) and puts them in your Content tab</div>
-                <div><Cmd>draft a WhatsApp message about exam timetable release</Cmd> â€” writes a WhatsApp draft only</div>
-                <div><Cmd>create a Facebook post about our new study group feature</Cmd> â€” writes a Facebook draft only</div>
+                <div><Cmd>write a post about a weekend sale</Cmd> — writes drafts for your main channels and puts them in Content</div>
+                <div><Cmd>draft a WhatsApp message about a new product</Cmd> — writes a WhatsApp draft only</div>
+                <div><Cmd>create a Facebook post about our grand opening</Cmd> — writes a Facebook draft only</div>
+                <div><Cmd>run pipeline d</Cmd> — samm will ask what the post should be about, then write it</div>
               </div>
             </Section>
 
@@ -181,23 +182,23 @@ export default function OperationsManual() {
           </AccordionTrigger>
           <AccordionContent className="space-y-4 px-4 pb-4 pt-1">
             <p className="text-sm text-muted-foreground">
-              Use Quick Posts when you need something written right now â€” no planning, no approval steps, no campaign.
-              Just tell samm the topic and drafts appear in your Content tab within seconds.
+              Use Quick Posts when you need something written right now. There is no campaign plan first.
+              You simply tell samm what the post should be about, and drafts appear in Content within seconds.
             </p>
 
             <Section title="How it works">
-              <Step n={1}>Type <Cmd>write a post about [topic]</Cmd> in samm chat.</Step>
-              <Step n={2}>samm agrees on the core message first â€” headline, call to action, and key fact.</Step>
-              <Step n={3}>Posts for each platform are written at the same time.</Step>
-              <Step n={4}>Drafts land in Content â†’ Drafts within about 10 seconds.</Step>
+              <Step n={1}>Type something like <Cmd>write a post about a weekend sale</Cmd> or <Cmd>draft a Facebook post about our grand opening</Cmd>.</Step>
+              <Step n={2}>If you type <Cmd>run pipeline d</Cmd>, samm will ask for the topic first.</Step>
+              <Step n={3}>samm decides on the main message, then writes the post in the right format for each channel.</Step>
+              <Step n={4}>Drafts land in Content -> Drafts within about 10 seconds.</Step>
               <Step n={5}>Review, edit if needed, then approve. Approved posts move to Scheduled.</Step>
             </Section>
 
             <Section title="What to know">
               <div className="space-y-1.5 text-sm text-muted-foreground">
-                <p>â€” Quick posts don't appear in Operations â†’ Overview â€” they're too fast to need tracking there.</p>
-                <p>â€” samm writes from the topic and your brand voice settings only. There's no research phase.</p>
-                <p>â€” To write for one platform only: <Cmd>draft a WhatsApp message about X</Cmd> or name the platform explicitly.</p>
+                <p>— Quick posts now show a recent activity signal in Operations -> Overview, so you can see when the last one ran.</p>
+                <p>— samm writes from the topic you give and the brand settings you saved. It does not do a long planning round first.</p>
+                <p>— To write for one channel only, name it clearly. Example: <Cmd>draft a WhatsApp message about a weekend sale</Cmd>.</p>
               </div>
             </Section>
           </AccordionContent>
@@ -417,12 +418,12 @@ export default function OperationsManual() {
               </div>
             </Section>
 
-            <Section title="Quick Posts">
-              <div className="space-y-1.5 text-sm text-muted-foreground">
-                <p><strong>What it does:</strong> writes posts on demand for any topic. No planning, no approval needed â€” just drafts.</p>
-                <p><strong>How to start:</strong> type <Cmd>write a post about [topic]</Cmd> in samm chat.</p>
-                <p><strong>What you get:</strong> a draft per platform in Content, ready within about 10 seconds.</p>
-                <p><strong>Not shown in Operations â†’ Overview</strong> â€” quick posts are too fast to need tracking there.</p>
+            <Section title="Quick posts">
+              <div className="space-y-2 text-sm">
+                <div><Cmd>write a post about a weekend sale</Cmd> — writes drafts for your main channels and puts them in Content</div>
+                <div><Cmd>draft a WhatsApp message about a new product</Cmd> — writes a WhatsApp draft only</div>
+                <div><Cmd>create a Facebook post about our grand opening</Cmd> — writes a Facebook draft only</div>
+                <div><Cmd>run pipeline d</Cmd> — samm will ask what the post should be about, then write it</div>
               </div>
             </Section>
 
@@ -455,18 +456,19 @@ export default function OperationsManual() {
               </div>
             </Section>
 
-            <Section title="Quick post â€” no drafts appeared in Content">
+            <Section title="Quick post — no drafts appeared in Content">
               <div className="space-y-1.5 text-sm text-muted-foreground">
-                <p>1. Quick posts don't appear in Operations â†’ Overview â€” check Content â†’ Drafts directly.</p>
-                <p>2. If the drafts aren't there, samm may have started a full campaign instead. Check Inbox for a campaign plan.</p>
-                <p>3. Use clearer phrasing: <Cmd>write a post about X</Cmd> rather than "run a campaign about X".</p>
+                <p>1. First check Content -> Drafts.</p>
+                <p>2. Then check Operations -> Overview. The latest quick post should show under Pipeline D and Recent Executions.</p>
+                <p>3. If the drafts still are not there, samm may have started a full campaign instead. Check Inbox for a campaign plan.</p>
+                <p>4. Use clear phrasing like <Cmd>write a post about a weekend sale</Cmd> instead of campaign wording.</p>
               </div>
             </Section>
 
             <Section title="Canva AI asks for social handles, logo, or a link">
               <div className="space-y-1.5 text-sm text-muted-foreground">
                 <p>The design brief is missing your social handles or primary link.</p>
-                <p>Go to Operations â†’ Settings â†’ Visual Brand, fill in the Social Handles fields and Primary Link, and save. The next campaign's design brief will include them.</p>
+                <p>Go to Operations -> Settings -> Visual Brand, fill in the Social Handles fields and Primary Link, and save. The next campaign's design brief will include them.</p>
               </div>
             </Section>
 
@@ -480,8 +482,9 @@ export default function OperationsManual() {
 
             <Section title="Approved post is not publishing">
               <div className="space-y-1.5 text-sm text-muted-foreground">
-                <p>Live publishing is coming soon â€” it's not active yet. Approved posts move to Scheduled but are not sent to platforms until live publishing is available.</p>
-                <p>For now: use the design brief and copy from Content to publish manually.</p>
+                <p>Some channels can still need extra connection setup before live publishing works properly.</p>
+                <p>If a post stays in Scheduled or moves to Failed, check Operations -> Settings and make sure the channel is connected correctly.</p>
+                <p>If needed, you can still copy the post from Content and publish it yourself while setup is being finished.</p>
               </div>
             </Section>
 
