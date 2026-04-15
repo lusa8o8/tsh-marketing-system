@@ -30,6 +30,10 @@ type GenerateTextParams = {
   maxTokens?: number
 }
 
+type GenerateJsonParams = GenerateTextParams & {
+  fallback?: string
+}
+
 const TRANSIENT_STATUS_PATTERNS = [
   'overloaded_error',
   'rate_limit_error',
@@ -183,6 +187,44 @@ export async function generateTextWithAnthropic(
   }
 
   throw lastError ?? new Error('LLM request failed')
+}
+
+export function extractJsonText(text: string, fallback = '{}') {
+  try {
+    const firstBrace = text.indexOf('{')
+    const firstBracket = text.indexOf('[')
+    const lastBrace = text.lastIndexOf('}')
+    const lastBracket = text.lastIndexOf(']')
+
+    if (firstBracket !== -1 && (firstBracket < firstBrace || firstBrace === -1) && lastBracket !== -1) {
+      return text.slice(firstBracket, lastBracket + 1)
+    }
+
+    if (firstBrace !== -1 && lastBrace !== -1) {
+      return text.slice(firstBrace, lastBrace + 1)
+    }
+  } catch (_error) {
+    // Fall through to fallback below.
+  }
+
+  return fallback
+}
+
+export function parseJsonText<T>(text: string, fallback = '{}'): T {
+  return JSON.parse(extractJsonText(text, fallback)) as T
+}
+
+export async function generateJsonWithAnthropic<T>(
+  client: Anthropic,
+  params: GenerateJsonParams,
+): Promise<T> {
+  const response = await generateTextWithAnthropic(client, params)
+  const rawText = response.content
+    .filter((item: any) => item.type === 'text')
+    .map((item: any) => item.text)
+    .join('\n')
+
+  return parseJsonText<T>(rawText, params.fallback ?? '{}')
 }
 
 

@@ -1452,7 +1452,11 @@ Progress:
   - verified result:
     - campaign brief lands in Inbox
     - approving the brief resumes correctly
-    - `6 copy assets landed in Content Registry as drafts ? waiting for marketer approval`
+    - `6 copy assets landed in Content Registry as drafts - waiting for marketer approval`
+- post-pass stabilization verified:
+  - Pipeline B post-approval weekly report resume is fixed (`config` now passed into the reporter)
+  - frontend production build passes after the generic calendar event-type polish
+  - direct provider calls now live only inside `_shared/llm-client.ts`
 
 Verified distinction:
 - the temporary confusion around a missing discounts draft was not a shared-adapter regression
@@ -1468,10 +1472,10 @@ Current shared-client coverage:
 - pipeline-b-weekly
 - pipeline-c-campaign
 
-Next narrow move:
-- decide whether any remaining direct LLM surface still needs migration
-- keep the adapter surface narrow unless a real need appears for shared JSON/helper expansion
-- treat Content Registry freshness/day grouping as a separate UI polish, not part of M13G success criteria
+Current conclusion:
+- `M13G` backend adapter migration is complete for the current LLM-backed surfaces
+- remaining LLM work is adapter maturation only (shared JSON policy, routing, observability, future provider overrides)
+- treat Content Registry freshness/day grouping and remaining calendar/UI cleanup as separate slices, not part of M13G success criteria
 
 ---
 ## Milestone 14: Multi-Channel Samm Access

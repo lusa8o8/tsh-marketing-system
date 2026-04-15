@@ -7,6 +7,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import {
   createAnthropicClient,
+  generateJsonWithAnthropic,
   generateTextWithAnthropic,
 } from '../_shared/llm-client.ts'
 import { getAgentDefinition } from '../_shared/agent-registry.ts'
@@ -513,7 +514,7 @@ async function runPerformanceAnalyser(
     .order('published_at', { ascending: false })
     .limit(10)
 
-  const response = await generateTextWithAnthropic(anthropic, {
+  return await generateJsonWithAnthropic<any>(anthropic, {
     task: 'performance_analyst',
     maxTokens: 300,
     system: `Analyse this workspace's marketing performance data and provide a brief summary.
@@ -522,11 +523,9 @@ Respond with JSON: { "summary": "...", "top_platform": "...", "key_insight": "..
       role: 'user',
       content: `Metrics: ${JSON.stringify(metrics?.slice(0, 4))}
 Recent posts: ${JSON.stringify(recentPosts?.slice(0, 5))}`
-    }]
+    }],
+    fallback: '{}',
   })
-
-  const raw = response.content[0].type === 'text' ? response.content[0].text : '{}'
-  return JSON.parse(extractJSON(raw))
 }
 
 // ── competitor researcher ─────────────────────────────────────────────
@@ -537,27 +536,25 @@ async function runCompetitorResearcher(
   anthropic: ReturnType<typeof createAnthropicClient>,
   event: CalendarEvent
 ) {
-  const response = await generateTextWithAnthropic(anthropic, {
+  const result = await generateJsonWithAnthropic<any>(anthropic, {
     task: 'competitor_researcher',
     maxTokens: 200,
-    system: `You are a competitor research analyst for an EdTech company in Zambia.
-Provide plausible competitor insights for campaign planning based on the event type and universities.
+    system: `You are a competitor research analyst for this workspace.
+Provide plausible competitor insights for campaign planning based on the event type and audience tags.
 Respond with JSON: { "insights": "...", "opportunity": "..." }`,
     messages: [{
       role: 'user',
       content: `Event: ${event.label}
-Universities: ${event.universities.join(', ')}
+Audience tags: ${event.universities.join(', ')}
 Event type: ${event.event_type}
 
 What are competitors likely doing and what opportunity exists for this workspace?`
-    }]
+    }],
+    fallback: '{}',
   })
 
-  const raw = response.content[0].type === 'text' ? response.content[0].text : '{}'
-  const result = JSON.parse(extractJSON(raw))
   return { ...result, competitor_insights_source: 'simulated' }
 }
-
 // ── ambassador reporter ───────────────────────────────────────────────
 async function runAmbassadorReporter(supabase: any, context: PipelineContext) {
   const { data: ambassadors } = await supabase
@@ -594,7 +591,7 @@ async function runCampaignPlanner(
   // Prevents the model from proposing 30-day campaigns for events 3 weeks away.
   const maxDurationDays = Math.min(daysUntilEvent, 14)
 
-  const response = await generateTextWithAnthropic(anthropic, {
+  const brief = await generateJsonWithAnthropic<any>(anthropic, {
     task: 'campaign_strategist',
     maxTokens: 1000,
     system: `You are the campaign strategist for this workspace.
@@ -616,26 +613,23 @@ Respond with JSON only matching this structure exactly:
       role: 'user',
       content: `Triggering event: ${event.label}
 Event date: ${event.event_date}
-Universities: ${event.universities.join(', ')}
+Audience tags: ${event.universities.join(', ')}
 Days until event: ${daysUntilEvent}
-Maximum campaign duration: ${maxDurationDays} days. This is days, not weeks. duration_days in your response must be a number between 1 and ${maxDurationDays}. Do not write "week" or "weeks" anywhere in the brief — use days only.
+Maximum campaign duration: ${maxDurationDays} days. This is days, not weeks. duration_days in your response must be a number between 1 and ${maxDurationDays}. Do not write "week" or "weeks" anywhere in the brief - use days only.
 
 Performance context: ${JSON.stringify(perfData)}
 Competitor opportunity: ${JSON.stringify(competitorData)}
 Ambassador coverage: ${JSON.stringify(ambassadorData)}
 
 Create the campaign brief.`
-    }]
+    }],
+    fallback: '{}',
   })
-
-  const raw = response.content[0].type === 'text' ? response.content[0].text : '{}'
-  const brief = JSON.parse(extractJSON(raw))
-  // Clamp duration regardless of model output — prevents "14 weeks" style errors
+  // Clamp duration regardless of model output - prevents "14 weeks" style errors
   brief.duration_days = Math.min(Math.max(1, Number(brief.duration_days) || maxDurationDays), maxDurationDays)
   return brief
 }
 
-// ── canonical copy writer ─────────────────────────────────────────────
 // Phase 1: produces the verbatim source-of-truth message for the campaign.
 // All platform adapters in phase 2 must use these fields exactly as written.
 async function runCanonicalCopyWriter(
@@ -644,7 +638,7 @@ async function runCanonicalCopyWriter(
   event: CalendarEvent,
   brandVoice: any
 ): Promise<{ headline: string; core_body: string; exact_cta: string; key_fact: string }> {
-  const response = await generateTextWithAnthropic(anthropic, {
+  return await generateJsonWithAnthropic<{ headline: string; core_body: string; exact_cta: string; key_fact: string }>(anthropic, {
     task: 'canonical_copywriter',
     maxTokens: 300,
     system: `${buildSystemPrompt(brandVoice)}
@@ -669,18 +663,15 @@ Event date: ${event.event_date}
 Duration: ${brief.duration_days} days
 
 Write the canonical campaign message now.`
-    }]
+    }],
+    fallback: '{}',
   })
-
-  const raw = response.content[0].type === 'text' ? response.content[0].text : '{}'
-  return JSON.parse(extractJSON(raw))
 }
 
-// ── copy writer ───────────────────────────────────────────────────────
 // Phase 2: adapts the canonical message for each platform in parallel.
 // Platform adapters may change format, length, and tone only.
 // headline, exact_cta, and key_fact must appear verbatim in every asset.
-async function runCopyWriter(
+async function runPlatformCopyAdapters(
   anthropic: ReturnType<typeof createAnthropicClient>,
   brief: CampaignBrief,
   event: CalendarEvent,
@@ -867,19 +858,19 @@ async function runMonitor(
     .limit(4)
 
   // NOTE: This is a campaign readiness check, not a live performance check.
-  // Posts have just been approved — they are scheduled but not yet published to
+  // Posts have just been approved - they are scheduled but not yet published to
   // live platforms (M13). The monitor validates that the campaign setup is coherent
   // (KPI targets are set, brand voice is complete, event window is valid).
   // Real post-performance monitoring belongs in a scheduled check after M13 publishing.
   const weeklySignupBenchmark = kpiTargets?.weekly_signups ?? brief.expected_signups
 
-  const response = await generateTextWithAnthropic(anthropic, {
+  const analysis = await generateJsonWithAnthropic<any>(anthropic, {
     task: 'campaign_monitor',
     maxTokens: 200,
     system: `You are reviewing a campaign setup before it goes live. Posts have been approved but not yet published.
 Check whether the campaign configuration is coherent and ready to execute.
 Consider: are KPI targets set, is the campaign window realistic, does the goal match the event?
-Do NOT claim to measure live post performance — posts are not published yet.
+Do NOT claim to measure live post performance - posts are not published yet.
 Respond with JSON: { "status": "ready|needs_attention", "insight": "...", "action": "none|escalate" }`,
     messages: [{
       role: 'user',
@@ -890,12 +881,11 @@ Expected signups: ${brief.expected_signups}
 Weekly signup benchmark (KPI target): ${weeklySignupBenchmark}
 Posts approved: ${(campaignPosts ?? []).length}
 Platform metrics baseline: ${JSON.stringify(metrics?.slice(0, 4))}`
-    }]
+    }],
+    fallback: '{}',
   })
 
-  const analysis = JSON.parse(extractJSON(response.content[0].type === 'text' ? response.content[0].text : '{}'))
-
-  console.log(`Monitor: campaign ${analysis.status} — ${analysis.insight}`)
+  console.log(`Monitor: campaign ${analysis.status} - ${analysis.insight}`)
 
   if (analysis.action === 'escalate') {
     await supabase.from('human_inbox').insert({
@@ -915,8 +905,6 @@ Platform metrics baseline: ${JSON.stringify(metrics?.slice(0, 4))}`
     console.log('Monitor: escalation sent to human inbox')
   }
 }
-
-// ── post-campaign report ──────────────────────────────────────────────
 async function runPostCampaignReport(
   supabase: any,
   anthropic: ReturnType<typeof createAnthropicClient>,
@@ -984,7 +972,7 @@ async function getNextCalendarEvent(supabase: any, orgId: string, today: string)
 
   if (error || !data) {
     throw new Error(
-      'No upcoming calendar event found. Add an event to the Academic Calendar before running a campaign.'
+      'No upcoming calendar event found. Add an event to the calendar before running a campaign.'
     )
   }
 
@@ -1000,25 +988,6 @@ async function getNextCalendarEvent(supabase: any, orgId: string, today: string)
 }
 
 // ── helpers ───────────────────────────────────────────────────────────
-function extractJSON(text: string, fallback: string = '{}'): string {
-  try {
-    const firstBrace = text.indexOf('{')
-    const firstBracket = text.indexOf('[')
-    const lastBrace = text.lastIndexOf('}')
-    const lastBracket = text.lastIndexOf(']')
-
-    if (firstBracket !== -1 && (firstBracket < firstBrace || firstBrace === -1) && lastBracket !== -1) {
-      return text.slice(firstBracket, lastBracket + 1)
-    }
-    if (firstBrace !== -1 && lastBrace !== -1) {
-      return text.slice(firstBrace, lastBrace + 1)
-    }
-    return fallback
-  } catch {
-    return fallback
-  }
-}
-
 function addDays(dateStr: string, days: number): string {
   const d = new Date(dateStr)
   d.setDate(d.getDate() + days)

@@ -251,68 +251,35 @@ Rule of thumb:
   - verified replacement: `What would you like to see more of from this brand this week? A) Product tips B) Behind-the-scenes updates C) Special offers`
 - M13F is now stable enough to hand off as a committed universalization checkpoint
 ## Current M13G Diagnosis
-- `M13G` pass 1 is complete and committed.
-  - `_shared/llm-client.ts` exists
-  - `coordinator-chat` now uses the shared Anthropic-backed client
-- `M13G` pass 2 is complete and committed.
-  - `pipeline-d-post` now uses the shared client for canonical copy and platform copy generation
-  - direct Anthropic instantiation was removed from Pipeline D
-  - one-off prompts still return clean deterministic responses
-  - Supabase `pipeline-d-post` invocations return `200`
-  - resulting drafts land in Content Registry
-- `M13G` pass 3 is complete and committed.
-  - `pipeline-a-engagement` now uses the shared client for comment classification and reply drafting
-  - deployment succeeded and the function returned `200`
-  - logs confirm:
-    - daily poll still posts clean generic copy
-    - ambassador gating still works when disabled
-    - daily metrics snapshot still writes
-  - no new runtime error surfaced in the migration
-- `M13G` pass 4 is now verified in browser and Supabase.
-  - `pipeline-b-weekly` now uses the shared client for:
-    - weekly plan generation
-    - weekly copy generation
-    - ambassador update generation
-    - weekly report generation
-  - direct Anthropic instantiation was removed from Pipeline B
-  - deployment succeeded and the function completed successfully
-  - logs confirm:
-    - `Plan created: 9 posts planned`
-    - `Running copy writer...`
-    - `Sending drafts to Content Registry for approval...`
-    - `9 drafts sent to Content Registry`
-  - post-approval resume bug was then discovered and fixed:
-    - `runReporter(...)` referenced `config` without receiving it
-    - verified fix: Pipeline B now resumes cleanly after draft approval
-    - logs confirm:
-      - `Ambassadors module disabled; skipping ambassador update`
-      - `Weekly report sent to human inbox`
-- `M13G` pass 5 is now verified in browser and Supabase.
-  - `pipeline-c-campaign` now uses the shared client for:
-    - performance analysis
-    - competitor research
-    - campaign planning
-    - canonical copy generation
-    - platform copy generation
-    - design brief writing
-    - campaign monitoring
-    - campaign reporting
-  - direct Anthropic instantiation was removed from Pipeline C
-  - additional runtime fixes were required and are now verified:
-    - standalone `run pipeline c` now prechecks for a future event and tells the user to add one first
-    - Pipeline C no longer throws a blank `500` when no future event exists
-    - resume now persists `calendar_event` before the first human gate, fixing the missing stored context failure
-    - coordinator event creation instructions now explicitly forbid inventing campuses or universities when the user did not specify them
-  - verified result:
-    - campaign brief lands in Inbox
-    - approving the brief resumes correctly
-    - `6 copy assets landed in Content Registry as drafts ? waiting for marketer approval`
+- `M13G` is now functionally complete for the current backend LLM surfaces.
+- Shared-client coverage now includes:
+  - `coordinator-chat`
+  - `pipeline-d-post`
+  - `pipeline-a-engagement`
+  - `pipeline-b-weekly`
+  - `pipeline-c-campaign`
+- Repo-wide verification confirms direct provider calls now live only in `_shared/llm-client.ts`.
+- Verified runtime fixes folded into the migration:
+  - Pipeline B resume now passes `config` into the weekly reporter, so post-approval reporting completes cleanly
+  - standalone `run pipeline c` now prechecks for a future event and tells the user to add one first
+  - Pipeline C no longer throws a blank `500` when no future event exists
+  - Pipeline C resume now persists `calendar_event` before the first human gate, fixing the missing stored context failure
+  - coordinator event creation instructions now explicitly forbid inventing campuses or universities when the user did not specify them
+- Verified outcomes in browser and Supabase:
+  - Pipeline B drafts, approval, and weekly report resume all complete successfully
+  - Pipeline C brief generation, approval, and draft creation resume all complete successfully
+  - one-off Pipeline D drafting remains stable after the shared-client migration
+  - Pipeline A still classifies, drafts replies, and posts the generic poll cleanly
+- Calendar UI polish now landed locally with a successful frontend production build:
+  - generic event types replace the academic event-type list
+  - legacy event types are normalized for display/editing
+  - dialog accessibility warning addressed with `DialogDescription`
 - Remaining non-adapter issue observed during the series:
   - Content Registry still lacks day segmentation / obvious drafted-at freshness on cards
-  - this is a separate UI polish, not an adapter blocker
+  - this is a separate UI polish, not an adapter/runtime blocker
 - Locked next move:
-  - commit the stabilized `M13G` pass 5 checkpoint
-  - if the adapter series continues, decide whether to migrate the next direct LLM surface or broaden the shared helper only when a real need appears
+  - treat remaining LLM work as adapter maturation, not more backend surface migration
+  - switch to the next UI polish / Meta verification slice deliberately, instead of extending M13G further by default
 
 ## Landing Page / Compliance Note
 - Add landing page requirements to the `M13` series as part of `M13F`.

@@ -15,6 +15,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -47,6 +48,35 @@ type EventFormData = {
   creative_override_allowed: boolean;
 };
 
+
+const EVENT_TYPE_OPTIONS = [
+  { value: "launch", label: "Launch" },
+  { value: "promotion", label: "Promotion" },
+  { value: "seasonal", label: "Seasonal" },
+  { value: "community", label: "Community" },
+  { value: "deadline", label: "Deadline" },
+  { value: "other", label: "Other" },
+] as const;
+
+const LEGACY_EVENT_TYPE_MAP: Record<string, string> = {
+  exam: "deadline",
+  registration: "launch",
+  holiday: "seasonal",
+  orientation: "community",
+  graduation: "promotion",
+  other: "other",
+};
+
+function normalizeEventType(eventType: string | null | undefined) {
+  if (!eventType) return "other";
+  return LEGACY_EVENT_TYPE_MAP[eventType] ?? eventType;
+}
+
+function getEventTypeLabel(eventType: string | null | undefined) {
+  const normalized = normalizeEventType(eventType);
+  return EVENT_TYPE_OPTIONS.find((option) => option.value === normalized)?.label ?? "Other";
+}
+
 function EventForm({
   value,
   onChange,
@@ -71,12 +101,11 @@ function EventForm({
               <SelectValue placeholder="Select type" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="exam">Exam</SelectItem>
-              <SelectItem value="registration">Registration</SelectItem>
-              <SelectItem value="holiday">Holiday</SelectItem>
-              <SelectItem value="orientation">Orientation</SelectItem>
-              <SelectItem value="graduation">Graduation</SelectItem>
-              <SelectItem value="other">Other</SelectItem>
+              {EVENT_TYPE_OPTIONS.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
@@ -130,7 +159,7 @@ function EventForm({
           Use short labels for the people this event matters to. Leave blank if it is a general event.
         </p>
       </div>
-      {["holiday", "graduation", "other"].includes(value.event_type) && (
+      {["seasonal", "promotion", "other"].includes(value.event_type) && (
         <div className="flex items-start gap-3 rounded-md border border-amber-100 bg-amber-50/50 p-3">
           <Switch
             checked={value.creative_override_allowed}
@@ -156,7 +185,7 @@ function EventForm({
 }
 
 const BLANK_FORM: EventFormData = {
-  event_type: "exam",
+  event_type: "launch",
   event_date: new Date().toISOString().split("T")[0],
   event_end_date: "",
   label: "",
@@ -195,7 +224,7 @@ export default function Calendar() {
 
   function openEdit(event: any) {
     setEditForm({
-      event_type: event.event_type,
+      event_type: normalizeEventType(event.event_type),
       event_date: event.event_date,
       event_end_date: event.event_end_date ?? "",
       label: event.label,
@@ -232,6 +261,9 @@ export default function Calendar() {
             <DialogContent>
               <DialogHeader>
                 <DialogTitle>Add Event</DialogTitle>
+                <DialogDescription>
+                  Add a future date that samm can plan around, like a launch, deadline, seasonal moment, or community event.
+                </DialogDescription>
               </DialogHeader>
               <EventForm
                 value={createForm}
@@ -250,6 +282,9 @@ export default function Calendar() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Edit Event</DialogTitle>
+            <DialogDescription>
+              Update the timing, label, or audience tags so future planning stays aligned with the real event.
+            </DialogDescription>
           </DialogHeader>
           <EventForm
             value={editForm}
@@ -338,7 +373,7 @@ export default function Calendar() {
                         {event.label}
                       </h3>
                       <Badge variant="outline" className="h-5 text-[10px] font-medium capitalize">
-                        {event.event_type}
+                        {getEventTypeLabel(event.event_type)}
                       </Badge>
                     </div>
                     <div className="flex flex-wrap gap-1.5">

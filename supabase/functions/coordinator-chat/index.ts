@@ -12,7 +12,7 @@ import {
 } from './scheduler.ts'
 import {
   createAnthropicClient,
-  generateTextWithAnthropic,
+  generateJsonWithAnthropic,
   getErrorMessage,
   isTransientLlmError,
 } from '../_shared/llm-client.ts'
@@ -42,27 +42,6 @@ function jsonResponse(body: ChatResponse | { error: string }, status = 200) {
       'Content-Type': 'application/json',
     },
   })
-}
-
-function extractJSON(text: string, fallback = '{}') {
-  try {
-    const firstBrace = text.indexOf('{')
-    const firstBracket = text.indexOf('[')
-    const lastBrace = text.lastIndexOf('}')
-    const lastBracket = text.lastIndexOf(']')
-
-    if (firstBracket !== -1 && (firstBracket < firstBrace || firstBrace === -1) && lastBracket !== -1) {
-      return text.slice(firstBracket, lastBracket + 1)
-    }
-
-    if (firstBrace !== -1 && lastBrace !== -1) {
-      return text.slice(firstBrace, lastBrace + 1)
-    }
-  } catch (_error) {
-    // Fall through to fallback below.
-  }
-
-  return fallback
 }
 
 function summarizeRuns(rows: any[]) {
@@ -325,7 +304,7 @@ Deno.serve(async (req) => {
 ActionObject is one of:
 - {"type":"run_pipeline","pipeline":"pipeline-a-engagement"|"pipeline-b-weekly"|"pipeline-c-campaign"|"coordinator","needs_confirmation": boolean, "title": string, "description": string}
 - {"type":"write_post","topic": string, "platforms": string[]|null, "event_ref": string|null, "title": string, "description": string}
-- {"type":"create_calendar_event","label": string, "event_date": "YYYY-MM-DD", "event_type": "exam"|"registration"|"holiday"|"orientation"|"graduation"|"other", "universities": string[], "run_pipeline_c": boolean, "needs_confirmation": boolean, "title": string, "description": string}
+- {"type":"create_calendar_event","label": string, "event_date": "YYYY-MM-DD", "event_type": "launch"|"promotion"|"seasonal"|"community"|"deadline"|"other", "universities": string[], "run_pipeline_c": boolean, "needs_confirmation": boolean, "title": string, "description": string}
 - {"type":"edit_calendar_event","event_id": string, "label"?: string, "event_date"?: string, "event_type"?: string, "needs_confirmation": boolean, "title": string, "description": string}
 - {"type":"delete_calendar_event","event_id": string, "label": string, "needs_confirmation": boolean, "title": string, "description": string}
 
@@ -344,7 +323,7 @@ Rules:
 - Keep suggestions short and actionable.`
     }
 
-    const completion = await generateTextWithAnthropic(anthropic, {
+    const parsed = await generateJsonWithAnthropic<any>(anthropic, {
       task: 'coordinator',
       system: 'You are samm. Be concise, operational, and clear. Return JSON only.',
       messages: [
@@ -353,14 +332,8 @@ Rules:
           content: JSON.stringify(prompt),
         },
       ],
+      fallback: '{"message":"I reviewed the workspace state.","suggestions":[]}',
     })
-
-    const rawText = completion.content
-      .filter((item: any) => item.type === 'text')
-      .map((item: any) => item.text)
-      .join('\n')
-
-    const parsed = JSON.parse(extractJSON(rawText, '{"message":"I reviewed the workspace state.","suggestions":[]}'))
 
     const suggestions = Array.isArray(parsed.suggestions) && parsed.suggestions.length > 0
       ? parsed.suggestions.slice(0, 4)

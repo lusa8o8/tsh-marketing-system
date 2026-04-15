@@ -9,7 +9,7 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { getIntegrationDefinition } from '../_shared/integration-registry.ts'
-import { createAnthropicClient, generateTextWithAnthropic } from '../_shared/llm-client.ts'
+import { createAnthropicClient, generateJsonWithAnthropic, generateTextWithAnthropic } from '../_shared/llm-client.ts
 
 const DEFAULT_ORG_ID = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'
 const DEFAULT_PLATFORMS = ['facebook', 'whatsapp', 'youtube', 'email']
@@ -25,17 +25,6 @@ function jsonResponse(body: unknown, status = 200) {
     status,
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   })
-}
-
-function extractJSON(text: string, fallback = '{}') {
-  try {
-    const firstBrace = text.indexOf('{')
-    const lastBrace = text.lastIndexOf('}')
-    if (firstBrace !== -1 && lastBrace !== -1) return text.slice(firstBrace, lastBrace + 1)
-  } catch (_e) {
-    // fall through
-  }
-  return fallback
 }
 
 async function getOrgConfig(supabase: any, orgId: string) {
@@ -72,7 +61,7 @@ async function runCanonicalCopy(
   eventRef: string | null,
   brandVoice: any,
 ): Promise<{ headline: string; core_body: string; exact_cta: string; key_fact: string }> {
-  const response = await generateTextWithAnthropic(anthropic, {
+  return await generateJsonWithAnthropic<{ headline: string; core_body: string; exact_cta: string; key_fact: string }>(anthropic, {
     task: 'one_off_writer',
     maxTokens: 300,
     system: `${buildSystemPrompt(brandVoice)}
@@ -92,9 +81,6 @@ Respond with JSON only:
 Write the canonical message now.`,
     }],
   })
-
-  const raw = response.content[0].type === 'text' ? response.content[0].text : '{}'
-  return JSON.parse(extractJSON(raw))
 }
 
 async function runPlatformAdapters(

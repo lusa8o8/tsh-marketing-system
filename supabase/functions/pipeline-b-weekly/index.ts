@@ -7,6 +7,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import {
   createAnthropicClient,
+  generateJsonWithAnthropic,
   generateTextWithAnthropic,
 } from '../_shared/llm-client.ts'
 import { getAgentDefinition } from '../_shared/agent-registry.ts'
@@ -78,25 +79,6 @@ ${badExample ? `Bad post example: "${badExample}"` : ''}`.trim()
 }
 
 // ── JSON extractor — handles markdown code fences safely ──────────────
-function extractJSON(text: string, fallback: string = '{}'): string {
-  try {
-    const firstBrace = text.indexOf('{')
-    const firstBracket = text.indexOf('[')
-    const lastBrace = text.lastIndexOf('}')
-    const lastBracket = text.lastIndexOf(']')
-
-    if (firstBracket !== -1 && (firstBracket < firstBrace || firstBrace === -1) && lastBracket !== -1) {
-      return text.slice(firstBracket, lastBracket + 1)
-    }
-    if (firstBrace !== -1 && lastBrace !== -1) {
-      return text.slice(firstBrace, lastBrace + 1)
-    }
-    return fallback
-  } catch {
-    return fallback
-  }
-}
-
 // ── mock new content feed ─────────────────────────────────────────────
 function getMockNewContent(config: any): NewContent[] {
   const orgLabel = config?.full_name?.trim() || config?.org_name?.trim() || 'Your brand'
@@ -500,10 +482,11 @@ async function runPlanAgent(
     ? `Weekly posting limits per platform: ${JSON.stringify(postingLimits)}`
     : 'Default: plan 5 posts across platforms.'
 
-  const response = await generateTextWithAnthropic(anthropic, {
-    task: 'weekly_planner',
-    maxTokens: 800,
-    system: `${buildSystemPrompt(config?.brand_voice, config?.full_name?.trim() || config?.org_name?.trim() || 'this brand')}
+  try {
+    return await generateJsonWithAnthropic<any[]>(anthropic, {
+      task: 'weekly_planner',
+      maxTokens: 800,
+      system: `${buildSystemPrompt(config?.brand_voice, config?.full_name?.trim() || config?.org_name?.trim() || 'this brand')}
 
 You are the weekly content planner for this business.
 Use the featured content, upcoming events, and recent metrics to plan a balanced week of posts.
@@ -511,7 +494,7 @@ Prioritize timely offers, proof, education, trust, and calls to action that fit 
 
 ${limitsStr}
 
-Respond with JSON only � an array of plan items:
+Respond with JSON only - an array of plan items:
 [
   {
     "platform": "facebook|whatsapp|youtube|email",
@@ -521,9 +504,9 @@ Respond with JSON only � an array of plan items:
     "goal": "awareness|trust|action|loyalty"
   }
 ]`,
-    messages: [{
-      role: 'user',
-      content: `Today: ${today}
+      messages: [{
+        role: 'user',
+        content: `Today: ${today}
 
 New content available:
 ${JSON.stringify(newContent, null, 2)}
@@ -544,18 +527,14 @@ ${JSON.stringify(metrics.slice(0, 4).map(m => ({
 })), null, 2)}
 
 Create this week's content plan.`
-    }]
-  })
-
-  const raw = response.content[0].type === 'text' ? response.content[0].text : '[]'
-  try {
-    return JSON.parse(extractJSON(raw, '[]'))
+      }],
+      fallback: '[]',
+    })
   } catch (e) {
     console.error('Plan agent JSON parse failed:', e)
     return []
   }
 }
-
 // ── copy writer ───────────────────────────────────────────────────────
 async function runCopyWriter(
   anthropic: ReturnType<typeof createAnthropicClient>,
