@@ -1,5 +1,4 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import Anthropic from 'https://esm.sh/@anthropic-ai/sdk@0.27.0'
 import {
   expireStaleRuns,
   invokePipeline,
@@ -11,6 +10,12 @@ import {
   type ChatResponse,
   type NormalizedWritePostIntent,
 } from './scheduler.ts'
+import {
+  createAnthropicClient,
+  generateTextWithAnthropic,
+  getErrorMessage,
+  isTransientLlmError,
+} from '../_shared/llm-client.ts'
 
 type ChatRole = 'user' | 'coordinator'
 
@@ -179,56 +184,6 @@ function buildWritePostResponse(
   }
 }
 
-function sleep(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms))
-}
-
-function getErrorMessage(error: unknown) {
-  if (error instanceof Error) return error.message
-  return String(error ?? 'Unknown error')
-}
-
-function isTransientModelError(error: unknown) {
-  const message = getErrorMessage(error).toLowerCase()
-  return (
-    message.includes('overloaded_error') ||
-    message.includes('rate_limit_error') ||
-    message.includes('temporarily unavailable') ||
-    message.includes('529') ||
-    message.includes('503') ||
-    message.includes('rate limit') ||
-    message.includes('overloaded')
-  )
-}
-
-async function createCoordinatorCompletionWithRetry(anthropic: Anthropic, prompt: unknown) {
-  let lastError: unknown = null
-
-  for (let attempt = 0; attempt < 2; attempt += 1) {
-    try {
-      return await anthropic.messages.create({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 600,
-        system: 'You are samm. Be concise, operational, and clear. Return JSON only.',
-        messages: [
-          {
-            role: 'user',
-            content: JSON.stringify(prompt),
-          },
-        ],
-      })
-    } catch (error) {
-      lastError = error
-      if (!isTransientModelError(error) || attempt === 1) {
-        throw error
-      }
-      await sleep(700)
-    }
-  }
-
-  throw lastError ?? new Error(TRANSIENT_MODEL_ERROR_MESSAGE)
-}
-
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
@@ -255,7 +210,7 @@ Deno.serve(async (req) => {
     }
 
     const supabase = createClient(supabaseUrl, serviceRoleKey)
-    const anthropic = new Anthropic({ apiKey: anthropicApiKey })
+    const anthropic = createAnthropicClient(anthropicApiKey)
 
     const {
       data: { user },
@@ -388,7 +343,16 @@ Rules:
 - Keep suggestions short and actionable.`
     }
 
-    const completion = await createCoordinatorCompletionWithRetry(anthropic, prompt)
+    const completion = await generateTextWithAnthropic(anthropic, {
+      task: 'coordinator',
+      system: 'You are samm. Be concise, operational, and clear. Return JSON only.',
+      messages: [
+        {
+          role: 'user',
+          content: JSON.stringify(prompt),
+        },
+      ],
+    })
 
     const rawText = completion.content
       .filter((item: any) => item.type === 'text')
@@ -552,7 +516,7 @@ Rules:
       suggestions,
     })
   } catch (error) {
-    if (isTransientModelError(error)) {
+    if (isTransientLlmError(error)) {
       return jsonResponse({ error: TRANSIENT_MODEL_ERROR_MESSAGE }, 503)
     }
 

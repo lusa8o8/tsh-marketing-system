@@ -1380,7 +1380,58 @@ Parallel implementation note:
 - docs and commit history must still keep Facebook-first as the stable milestone path
 
 ---
+### M13G: Shared LLM Adapter Foundation
+Goal:
+- make provider/model selection modular before later chat-channel and multimodel work expands the surface area
 
+Scope:
+- add a shared LLM layer under supabase/functions/_shared
+- centralize:
+  - provider selection
+  - model selection
+  - retry/backoff handling
+  - transient error mapping
+  - JSON/text generation helpers
+- keep Anthropic as the first live backend
+- design the adapter around task-based routing so different features can use different providers/models later
+
+Locked design:
+- do not keep adding direct SDK calls in each function
+- do not force one global provider for the entire product
+- use a shared adapter with task categories such as:
+  - coordinator
+  - classifier
+  - eply_writer
+  - weekly_planner
+  - weekly_reporter
+  - campaign_strategist
+  - canonical_copywriter
+  - platform_copywriter
+  - one_off_writer
+- first migration target: coordinator-chat
+
+Discovery snapshot (2026-04-15):
+- current backend is still all direct Anthropic usage
+- current direct call sites:
+  - pipeline-a-engagement
+  - pipeline-b-weekly
+  - pipeline-c-campaign
+  - pipeline-d-post
+  - coordinator-chat
+- no shared LLM abstraction exists yet
+- no provider-agnostic interface is in use yet
+
+Verification:
+- coordinator-chat can be migrated to the shared adapter without user-facing regression
+- direct provider duplication is reduced rather than expanded
+- the design remains compatible with future per-feature provider choice
+
+Next narrow move:
+- create the shared adapter shell
+- migrate coordinator-chat first
+- verify greeting, one-off post routing, and transient-error behavior remain stable
+
+---
 
 ## Milestone 14: Multi-Channel Samm Access
 Status:
