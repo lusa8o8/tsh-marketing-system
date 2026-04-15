@@ -10,11 +10,12 @@ import { getAgentDefinition } from '../_shared/agent-registry.ts'
 import { getIntegrationDefinition } from '../_shared/integration-registry.ts'
 import { PIPELINE_RUN_STATUS } from '../_shared/pipeline-run-status.ts'
 import { publishDueContentRows } from '../_shared/publish-content.ts'
+import { areAmbassadorsEnabled } from '../_shared/org-capabilities.ts'
 
 // ── types ─────────────────────────────────────────────────────────────
 interface NewContent {
   id: string
-  type: 'youtube_video' | 'studyhub_resource'
+  type: 'content_piece' | 'product_page'
   title: string
   description: string
   url: string
@@ -48,16 +49,29 @@ async function getOrgConfig(supabase: any, orgId: string) {
 }
 
 // ── brand voice prompt builder ────────────────────────────────────────
-function buildSystemPrompt(brandVoice: any): string {
-  return `You are the social media voice for ${brandVoice.full_name} (${brandVoice.name}).
-${brandVoice.full_name} helps Zambian university students pass exams through YouTube tutorials and past papers.
-Target audience: ${brandVoice.target_audience}
-Tone: ${brandVoice.tone}
-Always: ${brandVoice.always_say.join(', ')}
-Never: ${brandVoice.never_say.join(', ')}
-Preferred CTA: ${brandVoice.cta_preference}
-Good post example: "${brandVoice.example_good_post}"
-Bad post example: "${brandVoice.example_bad_post}"`
+function buildSystemPrompt(brandVoice: any, orgLabel?: string): string {
+  const tone = brandVoice?.tone ?? 'clear, helpful, and on-brand'
+  const audience = brandVoice?.target_audience?.trim() || 'your core audience'
+  const alwaysSay = Array.isArray(brandVoice?.always_say) && brandVoice.always_say.length > 0
+    ? brandVoice.always_say.join(', ')
+    : 'be useful, concrete, and trustworthy'
+  const neverSay = Array.isArray(brandVoice?.never_say) && brandVoice.never_say.length > 0
+    ? brandVoice.never_say.join(', ')
+    : 'make unrealistic promises or sound generic'
+  const ctaPreference = brandVoice?.cta_preference ?? brandVoice?.preferred_cta ?? 'Learn more'
+  const goodExample = brandVoice?.example_good_post ?? brandVoice?.good_post_example ?? ''
+  const badExample = brandVoice?.example_bad_post ?? brandVoice?.bad_post_example ?? ''
+
+  const resolvedOrgLabel = orgLabel ?? brandVoice?.full_name ?? brandVoice?.name ?? 'this brand'
+
+  return `You are the social media voice for ${resolvedOrgLabel}.
+Target audience: ${audience}
+Tone: ${tone}
+Always: ${alwaysSay}
+Never: ${neverSay}
+Preferred CTA: ${ctaPreference}
+${goodExample ? `Good post example: "${goodExample}"` : ''}
+${badExample ? `Bad post example: "${badExample}"` : ''}`.trim()
 }
 
 // ── JSON extractor — handles markdown code fences safely ──────────────
@@ -81,34 +95,41 @@ function extractJSON(text: string, fallback: string = '{}'): string {
 }
 
 // ── mock new content feed ─────────────────────────────────────────────
-function getMockNewContent(): NewContent[] {
+function getMockNewContent(config: any): NewContent[] {
+  const orgLabel = config?.full_name?.trim() || config?.org_name?.trim() || 'Your brand'
+  const primaryUrl = config?.primary_cta_url
+    || config?.social_handles?.custom_app_url
+    || config?.social_handles?.studyhub_url
+    || 'https://example.com'
+  const audience = config?.brand_voice?.target_audience?.trim() || 'your core audience'
+
   return [
     {
-      id: 'yt_new_001',
-      type: 'youtube_video',
-      title: 'How to Ace Organic Chemistry — Full UNZA Exam Breakdown',
-      description: 'Complete walkthrough of the most common organic chemistry exam questions at UNZA and CBU.',
-      url: 'https://youtube.com/watch?v=example1',
-      subject: 'Chemistry',
-      university_relevance: ['UNZA', 'CBU', 'MU']
+      id: 'content_001',
+      type: 'content_piece',
+      title: `${orgLabel} featured offer`,
+      description: `A timely highlight built for ${audience}.`,
+      url: primaryUrl,
+      subject: 'Offer',
+      university_relevance: []
     },
     {
-      id: 'yt_new_002',
-      type: 'youtube_video',
-      title: 'Statistics Made Simple — Probability & Distributions',
-      description: 'Step by step guide to probability distributions and hypothesis testing.',
-      url: 'https://youtube.com/watch?v=example2',
-      subject: 'Statistics',
-      university_relevance: ['UNZA', 'ZCAS', 'CBU']
+      id: 'content_002',
+      type: 'content_piece',
+      title: `${orgLabel} customer story`,
+      description: 'A trust-building story that shows the value behind the brand.',
+      url: primaryUrl,
+      subject: 'Story',
+      university_relevance: []
     },
     {
-      id: 'sh_new_001',
-      type: 'studyhub_resource',
-      title: 'UNZA Past Papers Pack — Economics 2019–2024',
-      description: '5 years of UNZA Economics past papers with detailed model answers.',
-      url: 'https://studyhub.com/resources/unza-economics-past-papers',
-      subject: 'Economics',
-      university_relevance: ['UNZA']
+      id: 'content_003',
+      type: 'product_page',
+      title: `${orgLabel} main product or landing page`,
+      description: 'A direct response destination for people ready to take action.',
+      url: primaryUrl,
+      subject: 'CTA',
+      university_relevance: []
     }
   ]
 }
@@ -176,7 +197,7 @@ Deno.serve(async (req) => {
         .lte('event_date', addDays(context.today, 21))
         .order('event_date', { ascending: true }),
 
-      Promise.resolve({ data: getMockNewContent(), error: null })
+      Promise.resolve({ data: getMockNewContent(config), error: null })
     ])
 
     const lastWeekMetrics = metricsResult.data ?? []
@@ -193,7 +214,8 @@ Deno.serve(async (req) => {
       upcomingEvents,
       newContent,
       context.today,
-      config.posting_limits
+      config.posting_limits,
+      config
     )
     console.log(`Plan created: ${weeklyPlan.length} posts planned`)
 
@@ -422,9 +444,11 @@ async function resumePipelineBRun(params: {
       results.errors.push(`${failed.platform}: ${failed.error}`)
     }
 
-    if (!results.ambassador_update_sent) {
-      await runAmbassadorUpdate(supabase, anthropic, context, getMockNewContent(), config.brand_voice)
+    if (!results.ambassador_update_sent && areAmbassadorsEnabled(config)) {
+      await runAmbassadorUpdate(supabase, anthropic, context, getMockNewContent(config), config.brand_voice, config)
       results.ambassador_update_sent = true
+    } else if (!areAmbassadorsEnabled(config)) {
+      console.log('Ambassadors module disabled; skipping ambassador update')
     }
 
     if (!results.report_generated) {
@@ -467,7 +491,8 @@ async function runPlanAgent(
   upcomingEvents: any[],
   newContent: NewContent[],
   today: string,
-  postingLimits: any
+  postingLimits: any,
+  config: any
 ): Promise<any[]> {
 
   const limitsStr = postingLimits
@@ -477,12 +502,15 @@ async function runPlanAgent(
   const response = await anthropic.messages.create({
     model: 'claude-sonnet-4-5',
     max_tokens: 800,
-    system: `You are the weekly content planner for TSH (Transcended Study Hub).
-TSH helps Zambian university students pass exams via YouTube tutorials and StudyHub past papers.
+    system: `${buildSystemPrompt(config?.brand_voice, config?.full_name?.trim() || config?.org_name?.trim() || 'this brand')}
+
+You are the weekly content planner for this business.
+Use the featured content, upcoming events, and recent metrics to plan a balanced week of posts.
+Prioritize timely offers, proof, education, trust, and calls to action that fit the brand.
 
 ${limitsStr}
 
-Respond with JSON only — an array of plan items:
+Respond with JSON only � an array of plan items:
 [
   {
     "platform": "facebook|whatsapp|youtube|email",
@@ -605,7 +633,7 @@ async function runAmbassadorUpdate(
     max_tokens: 200,
     system: `${buildSystemPrompt(brandVoice)}
 
-Write a brief weekly update message for TSH student ambassadors.
+Write a brief weekly update message for this brand's ambassadors or partner reps.
 Keep it energetic, under 150 words. Include new content to share and remind them to report weekly reach numbers.`,
     messages: [{
       role: 'user',
@@ -615,7 +643,7 @@ Keep it energetic, under 150 words. Include new content to share and remind them
 
   const updateMessage = response.content[0].type === 'text'
     ? response.content[0].text.trim()
-    : 'Hey TSH ambassadors! New content is live this week. Share it with your campus groups!'
+    : 'New content is live this week. Share it with your audience and report back on reach.'
 
   console.log(`Ambassador update drafted for ${ambassadors.length} ambassadors (mock send)`)
 
@@ -647,7 +675,7 @@ async function runReporter(
   const response = await anthropic.messages.create({
     model: 'claude-sonnet-4-5',
     max_tokens: 500,
-    system: `You write concise weekly marketing reports for the CEO of TSH.
+    system: `You write concise weekly marketing reports for the business owner or operator of this workspace.
 Plain text, under 200 words. Cover: what was done, key numbers, what worked, what didn't, plan for next week.`,
     messages: [{
       role: 'user',
@@ -655,9 +683,8 @@ Plain text, under 200 words. Cover: what was done, key numbers, what worked, wha
 Posts drafted: ${pipelineResults.posts_drafted}
 Drafts for approval: ${pipelineResults.drafts_sent_for_approval}
 Published: ${pipelineResults.posts_published}
-Ambassador update sent: ${pipelineResults.ambassador_update_sent}
-
-Metrics:
+${areAmbassadorsEnabled(config) ? `Ambassador update sent: ${pipelineResults.ambassador_update_sent}
+` : ''}Metrics:
 ${metrics.slice(0, 4).map((m: any) =>
   `${m.platform}: ${m.followers} followers, ${m.post_reach} reach, ${m.engagement} engagement, ${m.signups} sign-ups`
 ).join('\n')}
@@ -705,4 +732,12 @@ function getScheduledTime(day: string, today: string): string {
   scheduled.setHours(9, 0, 0, 0)
   return scheduled.toISOString()
 }
+
+
+
+
+
+
+
+
 

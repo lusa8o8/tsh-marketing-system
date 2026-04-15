@@ -9,6 +9,7 @@ import Anthropic from 'https://esm.sh/@anthropic-ai/sdk@0.27.0'
 import { getAgentDefinition } from '../_shared/agent-registry.ts'
 import { INTEGRATION_REGISTRY, getIntegrationDefinition } from '../_shared/integration-registry.ts'
 import { PIPELINE_RUN_STATUS } from '../_shared/pipeline-run-status.ts'
+import { areAmbassadorsEnabled } from '../_shared/org-capabilities.ts'
 
 // ── types ─────────────────────────────────────────────────────────────
 interface CalendarEvent {
@@ -77,7 +78,7 @@ function buildSystemPrompt(brandVoice: any): string {
     : ''
 
   return `You are the social media voice for ${brandVoice.full_name} (${brandVoice.name}).
-${brandVoice.full_name} helps Zambian university students pass exams through YouTube tutorials and past papers.
+${brandVoice.full_name} serves its audience with useful products, services, or content.
 Target audience: ${brandVoice.target_audience}
 Tone: ${brandVoice.tone}
 Always: ${brandVoice.always_say.join(', ')}
@@ -163,7 +164,14 @@ Deno.serve(async (req) => {
     const [perfResult, competitorResult, ambassadorResult] = await Promise.all([
       runPerformanceAnalyser(supabase, anthropic, context),
       runCompetitorResearcher(anthropic, event),
-      runAmbassadorReporter(supabase, context)
+      areAmbassadorsEnabled(config)
+        ? runAmbassadorReporter(supabase, context)
+        : Promise.resolve({
+            active_count: 0,
+            flagged_count: 0,
+            universities_covered: [],
+            summary: 'Ambassadors module disabled for this workspace',
+          })
     ])
 
     results.research_completed = true
@@ -497,7 +505,7 @@ async function runPerformanceAnalyser(
   const response = await anthropic.messages.create({
     model: 'claude-sonnet-4-5',
     max_tokens: 300,
-    system: `Analyse TSH marketing performance data and provide a brief summary.
+    system: `Analyse this workspace's marketing performance data and provide a brief summary.
 Respond with JSON: { "summary": "...", "top_platform": "...", "key_insight": "..." }`,
     messages: [{
       role: 'user',
@@ -530,7 +538,7 @@ Respond with JSON: { "insights": "...", "opportunity": "..." }`,
 Universities: ${event.universities.join(', ')}
 Event type: ${event.event_type}
 
-What are competitors likely doing and what opportunity exists for TSH?`
+What are competitors likely doing and what opportunity exists for this workspace?`
     }]
   })
 
@@ -578,10 +586,8 @@ async function runCampaignPlanner(
   const response = await anthropic.messages.create({
     model: 'claude-sonnet-4-5',
     max_tokens: 1000,
-    system: `You are the campaign strategist for TSH (Transcended Study Hub).
-TSH helps Zambian university students pass exams through YouTube tutorials and StudyHub past papers.
-
-Create a focused campaign brief for the upcoming academic event.
+    system: `You are the campaign strategist for this workspace.
+Create a focused campaign brief for the upcoming event.
 Respond with JSON only matching this structure exactly:
 {
   "name": "campaign name",
@@ -591,7 +597,7 @@ Respond with JSON only matching this structure exactly:
   "duration_days": number,
   "platforms": ["facebook","whatsapp","youtube","email"],
   "key_message": "core message in one sentence",
-  "call_to_action": "exactly what students should do",
+  "call_to_action": "exactly what the audience should do",
   "content_needed": ["list of content pieces needed"],
   "expected_signups": number
 }`,
@@ -647,7 +653,7 @@ Respond with JSON only:
 Goal: ${brief.goal}
 Key message: ${brief.key_message}
 Call to action: ${brief.call_to_action}
-Target: ${event.universities.join(', ')} students
+Target: ${event.universities.join(', ')} audience segments
 Event date: ${event.event_date}
 Duration: ${brief.duration_days} days
 
@@ -672,12 +678,12 @@ async function runCopyWriter(
 ): Promise<any[]> {
 
   const platforms = [
-    { platform: getIntegrationDefinition('facebook').id, instruction: '2-3 sentences, emoji ok, end with StudyHub link' },
+    { platform: getIntegrationDefinition('facebook').id, instruction: '2-3 sentences, emoji ok, end with the CTA or primary link if one is available' },
     { platform: getIntegrationDefinition('facebook').id, instruction: 'focus on social proof or urgency — different framing from the first post, same core message' },
     { platform: getIntegrationDefinition('whatsapp').id, instruction: 'under 200 characters, conversational, one clear call to action' },
     { platform: getIntegrationDefinition('youtube').id, instruction: 'short community post, ask a question to drive comments' },
     { platform: getIntegrationDefinition('email').id, instruction: 'start first line with Subject: then write email body, warm and helpful' },
-    { platform: getIntegrationDefinition('whatsapp').id, instruction: 'ambassador talking points — bullet list of what to say to classmates' },
+    { platform: getIntegrationDefinition('whatsapp').id, instruction: 'partner or word-of-mouth talking points — bullet list of what to say or share' },
   ]
 
   const results = await Promise.all(
@@ -700,7 +706,7 @@ Adapt the surrounding format, length, and tone for the platform only.`,
             role: 'user',
             content: `Campaign: ${brief.name}
 Core message: ${canonical.core_body}
-Target: ${event.universities.join(', ')} students
+Target: ${event.universities.join(', ')} audience segments
 Event date: ${event.event_date}
 Platform: ${p.platform}
 Instructions: ${p.instruction}
@@ -777,7 +783,7 @@ ${socialHandles.facebook ? `- Facebook: ${socialHandles.facebook}` : ''}
 ${socialHandles.whatsapp ? `- WhatsApp: ${socialHandles.whatsapp}` : ''}
 ${socialHandles.instagram ? `- Instagram: ${socialHandles.instagram}` : ''}
 ${socialHandles.tiktok ? `- TikTok: ${socialHandles.tiktok}` : ''}
-${socialHandles.studyhub_url ? `- StudyHub: ${socialHandles.studyhub_url}` : ''}`.replace(/\n-\s*$\n/gm, '')
+${(socialHandles.custom_app_url ?? socialHandles.studyhub_url) ? `- Product / Landing Page: ${socialHandles.custom_app_url ?? socialHandles.studyhub_url}` : ''}`.replace(/\n-\s*$\n/gm, '')
     : '\nSOCIAL HANDLES: Not configured — ask the brand manager before placing social icons.'
 
   const ctaBlock = primaryCtaUrl
@@ -917,7 +923,7 @@ async function runPostCampaignReport(
   const response = await anthropic.messages.create({
     model: 'claude-sonnet-4-5',
     max_tokens: 400,
-    system: `Write a concise post-campaign report for the CEO of TSH.
+    system: `Write a concise post-campaign report for the business owner or operator.
 Plain text, under 200 words. Cover: what ran, results vs goal, key lesson, recommendation.`,
     messages: [{
       role: 'user',
@@ -1121,6 +1127,9 @@ function nextPreferredWeekday(
   fallback.setUTCHours(prefHour, prefMin, 0, 0)
   return fallback.getTime()
 }
+
+
+
 
 
 

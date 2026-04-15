@@ -381,7 +381,7 @@ Rules:
   - Infer the date from the user message (e.g. "next Friday" relative to today ${today}).
   - If the user says "schedule a campaign for [event] on [date] and run the pipeline" — use create_calendar_event with run_pipeline_c: true. Do NOT use run_pipeline for this; the event must be created first.
   - Set run_pipeline_c to true only if the user also asks to draft, create, or run a campaign for that event.
-  - universities defaults to ["UNZA","CBU","MU","ZCAS","DMI"] if none are specified.
+  - universities is the existing storage field for audience tags or segments. Use an empty array if the user does not specify any.
 - Use edit_calendar_event when the user asks to update, change, rename, or reschedule an existing event. Match the event by label or date from the upcoming_events list and use its id. Always set needs_confirmation: false for edits — they are reversible.
 - Use delete_calendar_event when the user asks to remove or delete an existing event. Match from upcoming_events and use its id. Always set needs_confirmation: true for deletes — they are permanent.
 - For status questions, summaries, metrics, approvals, and calendar reads, answer directly.

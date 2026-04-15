@@ -88,7 +88,7 @@ export const INTEGRATION_REGISTRY = {
     capabilities: ['publish_post', 'send_message', 'fetch_metrics'],
     mocked: true,
     enabled_by_capability: 'email_enabled',
-    // Tuesday only — highest open rates for educational/exam-prep email.
+    // Tuesday often performs well for marketing email.
     // One send per campaign: email fatigue is real; quality over frequency.
     cadence_policy: {
       launch_blast: true,
@@ -100,12 +100,12 @@ export const INTEGRATION_REGISTRY = {
   },
   studyhub: {
     id: 'studyhub',
-    label: 'StudyHub',
+    label: 'Custom App',
     kind: 'content',
     capabilities: ['fetch_content_feed', 'fetch_signups'],
     mocked: true,
     enabled_by_capability: 'studyhub_enabled',
-    // No cadence_policy — StudyHub is a data source, not a publishing channel.
+    // No cadence_policy — this is a data source, not a publishing channel.
   },
 } as const satisfies Record<string, IntegrationDefinition>
 

@@ -60,7 +60,7 @@ type OrgConfig = {
     whatsapp: string;
     instagram: string;
     tiktok: string;
-    studyhub_url: string;
+    custom_app_url: string;
   };
   primary_cta_url: string;
   platform_connections: Record<string, unknown>;
@@ -180,7 +180,7 @@ function summarizeRun(row: any) {
 
 function getPlatformLabel(platform?: string | null) {
   const value = platform ?? "";
-  if (value === "studyhub") return "StudyHub";
+  if (value === "studyhub") return "Custom App";
   return titleCase(value);
 }
 
@@ -330,7 +330,7 @@ function normalizeOrgConfig(row: any): OrgConfig {
       whatsapp: row?.social_handles?.whatsapp ?? "",
       instagram: row?.social_handles?.instagram ?? "",
       tiktok: row?.social_handles?.tiktok ?? "",
-      studyhub_url: row?.social_handles?.studyhub_url ?? "",
+      custom_app_url: row?.social_handles?.custom_app_url ?? row?.social_handles?.studyhub_url ?? "",
     },
     primary_cta_url: row?.primary_cta_url ?? "",
     platform_connections: row?.platform_connections ?? {},
@@ -1297,4 +1297,5 @@ export function useTriggerPipeline(options?: MutationHookOptions) {
     ...options?.mutation,
   });
 }
+
 

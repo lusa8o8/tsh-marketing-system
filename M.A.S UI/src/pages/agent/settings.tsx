@@ -19,7 +19,7 @@ const INTEGRATIONS = [
   { id: "whatsapp",  name: "WhatsApp Business",         Icon: SiWhatsapp,  color: "#25D366", live: true },
   { id: "youtube",   name: "YouTube Channel",           Icon: SiYoutube,   color: "#FF0000", live: true },
   { id: "email",     name: "Email (SendGrid)",           Icon: Mail,        color: "#000",    live: true },
-  { id: "studyhub",  name: "StudyHub App",              Icon: Building,    color: "#000",    live: true },
+  { id: "studyhub",  name: "Custom App / Private Tool",   Icon: Building,    color: "#000",    live: true },
   { id: "linkedin",  name: "LinkedIn Page",             Icon: Linkedin,    color: "#0A66C2", live: false },
   { id: "tiktok",    name: "TikTok Account",            Icon: Music2,      color: "#010101", live: false },
   { id: "slack",     name: "Slack Workspace",           Icon: Hash,        color: "#4A154B", live: false },
@@ -70,6 +70,9 @@ export default function AgentSettings() {
   }, [config]);
 
   const [triggeringPipeline, setTriggeringPipeline] = useState<string | null>(null);
+  const platformConnections = ((config?.platform_connections ?? {}) as Record<string, any>);
+  const moduleSettings = (platformConnections.modules ?? {}) as Record<string, { enabled?: boolean }>;
+  const isModuleEnabled = (moduleId: string) => moduleSettings[moduleId]?.enabled !== false;
 
   async function handleTriggerPipeline(pipeline: "a" | "b" | "c", label: string) {
     setTriggeringPipeline(pipeline);
@@ -98,6 +101,33 @@ export default function AgentSettings() {
           toast({
             title: currentlyConnected ? "Integration disabled" : "Integration enabled",
             description: `${platformId} connection ${currentlyConnected ? "removed" : "saved"}.`,
+          });
+        },
+      }
+    );
+  }
+
+  function handleToggleModule(moduleId: string, currentlyEnabled: boolean) {
+    const updated = {
+      ...platformConnections,
+      modules: {
+        ...moduleSettings,
+        [moduleId]: {
+          ...(moduleSettings[moduleId] ?? {}),
+          enabled: !currentlyEnabled,
+          updated_at: new Date().toISOString(),
+        },
+      },
+    };
+
+    updateMutation.mutate(
+      { data: { platform_connections: updated } },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: getGetOrgConfigQueryKey() });
+          toast({
+            title: !currentlyEnabled ? "Module enabled" : "Module disabled",
+            description: `${moduleId} is now ${!currentlyEnabled ? "active" : "hidden"} in this workspace.`,
           });
         },
       }
@@ -169,12 +199,13 @@ export default function AgentSettings() {
 
   const handleSaveVisualBrand = () => {
     const { markdown_design_spec, social_handles, primary_cta_url, ...brandVisualFields } = visualData;
+    const customAppUrl = social_handles?.custom_app_url ?? social_handles?.studyhub_url ?? "";
     updateMutation.mutate(
       {
         data: {
           brand_visual: brandVisualFields,
           markdown_design_spec: markdown_design_spec ?? "",
-          social_handles: social_handles ?? {},
+          social_handles: { ...(social_handles ?? {}), custom_app_url: customAppUrl, studyhub_url: customAppUrl },
           primary_cta_url: primary_cta_url ?? "",
         },
       },
@@ -449,12 +480,12 @@ export default function AgentSettings() {
                     </p>
                     <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                       {[
-                        { key: "youtube", label: "YouTube", placeholder: "@TranscendedStudyHub" },
-                        { key: "facebook", label: "Facebook", placeholder: "Transcended Study Hub" },
+                        { key: "youtube", label: "YouTube", placeholder: "@yourchannel" },
+                        { key: "facebook", label: "Facebook", placeholder: "Your page name" },
                         { key: "whatsapp", label: "WhatsApp", placeholder: "+260 97X XXXXXX or wa.me link" },
-                        { key: "instagram", label: "Instagram", placeholder: "@tsh_zambia" },
-                        { key: "tiktok", label: "TikTok", placeholder: "@tsh_zambia" },
-                        { key: "studyhub_url", label: "StudyHub URL", placeholder: "https://studyhub.tsh.co.zm" },
+                        { key: "instagram", label: "Instagram", placeholder: "@yourbrand" },
+                        { key: "tiktok", label: "TikTok", placeholder: "@yourbrand" },
+                        { key: "custom_app_url", label: "Product / Landing Page", placeholder: "https://yourapp.example.com" },
                       ].map(({ key, label, placeholder }) => (
                         <div key={key} className="space-y-1.5">
                           <Label className="text-xs">{label}</Label>
@@ -475,7 +506,7 @@ export default function AgentSettings() {
                       <Input
                         value={visualData.primary_cta_url || ""}
                         onChange={(e) => setVisualData({ ...visualData, primary_cta_url: e.target.value })}
-                        placeholder="https://studyhub.tsh.co.zm"
+                        placeholder="https://yourbrand.example.com"
                         className="h-9"
                       />
                       <p className="text-[11px] text-muted-foreground">
@@ -510,8 +541,8 @@ export default function AgentSettings() {
                 <div className="flex items-center gap-3">
                   <div className="rounded-md bg-muted p-2 text-foreground/70"><Share2 className="h-4 w-4" /></div>
                   <div className="text-left">
-                    <h3 className="text-sm font-semibold">Integrations & Platforms</h3>
-                    <p className="mt-0.5 text-xs text-muted-foreground">Manage connected publishing accounts</p>
+                    <h3 className="text-sm font-semibold">Connections & Modules</h3>
+                    <p className="mt-0.5 text-xs text-muted-foreground">Manage connected channels and optional workspace modules</p>
                   </div>
                 </div>
               </AccordionTrigger>
@@ -579,6 +610,42 @@ export default function AgentSettings() {
                             </div>
                           </div>
                         ) : null}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/60">Optional modules</div>
+                <div className="mb-5 space-y-2">
+                  {[
+                    {
+                      id: "ambassadors",
+                      name: "Ambassadors",
+                      description: "Turn on ambassador management and related workspace surfaces.",
+                    },
+                    {
+                      id: "affiliates",
+                      name: "Affiliates",
+                      description: "Reserve this module for future affiliate and referral workflows. No live automation is attached yet.",
+                    },
+                  ].map((module) => {
+                    const enabled = isModuleEnabled(module.id);
+                    return (
+                      <div key={module.id} className="flex items-center justify-between rounded-lg border bg-background p-3">
+                        <div className="pr-4">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium">{module.name}</span>
+                            <Badge variant="outline" className="h-5 px-1.5 text-[10px] text-muted-foreground">
+                              {enabled ? "Active" : "Hidden"}
+                            </Badge>
+                          </div>
+                          <p className="mt-1 text-xs text-muted-foreground">{module.description}</p>
+                        </div>
+                        <Switch
+                          checked={enabled}
+                          disabled={updateMutation.isPending}
+                          onCheckedChange={() => handleToggleModule(module.id, enabled)}
+                        />
                       </div>
                     );
                   })}
@@ -703,7 +770,7 @@ export default function AgentSettings() {
                     { key: "whatsapp_reach_per_post", label: "WhatsApp Reach/Post" },
                     { key: "facebook_reach_per_post", label: "Facebook Reach/Post" },
                     { key: "email_open_rate", label: "Email Open Rate (%)" },
-                    { key: "active_ambassadors", label: "Active Ambassadors" }
+                    ...(isModuleEnabled("ambassadors") ? [{ key: "active_ambassadors", label: "Active Ambassadors" }] : [])
                   ].map((field) => (
                     <div key={field.key} className="flex items-center justify-between border-b border-muted p-3">
                       <Label className="text-xs">{field.label}</Label>
@@ -724,3 +791,5 @@ export default function AgentSettings() {
     </div>
   );
 }
+
+

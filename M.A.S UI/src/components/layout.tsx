@@ -44,6 +44,9 @@ function SidebarContent({ onNavigate }: SidebarContentProps) {
   const isOperationsActive = location.startsWith("/operations");
   const workspaceName = config?.org_name ?? "Workspace";
   const accountLabel = config?.full_name ?? config?.org_name ?? "Operations";
+  const moduleSettings = ((config?.platform_connections as Record<string, any> | undefined)?.modules ?? {}) as Record<string, { enabled?: boolean }>;
+  const ambassadorsEnabled = moduleSettings.ambassadors?.enabled !== false;
+  const visibleNavItems = navItems.filter((item) => item.href !== "/ambassadors" || ambassadorsEnabled);
 
   const handleSignOut = async () => {
     await signOut();
@@ -60,7 +63,7 @@ function SidebarContent({ onNavigate }: SidebarContentProps) {
       </div>
 
       <nav className="flex-1 space-y-1 overflow-y-auto p-2">
-        {navItems.map((item) => {
+        {visibleNavItems.map((item) => {
           const isActive = item.isPrefix ? location.startsWith(item.href) : location === item.href;
 
           return (
@@ -198,3 +201,4 @@ export function Layout({ children }: { children: React.ReactNode }) {
     </div>
   );
 }
+

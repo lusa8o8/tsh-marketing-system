@@ -8,6 +8,7 @@ import { Layout } from "@/components/layout";
 import NotFound from "@/pages/not-found";
 import Login from "@/pages/login";
 import { getActiveSession, supabase } from "@/lib/supabase";
+import { useGetOrgConfig } from "@/lib/api";
 
 import Inbox from "@/pages/inbox";
 import Content from "@/pages/content";
@@ -22,6 +23,10 @@ import AgentManual from "@/pages/agent/manual";
 const queryClient = new QueryClient();
 
 function Router() {
+  const { data: config } = useGetOrgConfig();
+  const moduleSettings = ((config?.platform_connections as Record<string, any> | undefined)?.modules ?? {}) as Record<string, { enabled?: boolean }>;
+  const ambassadorsEnabled = moduleSettings.ambassadors?.enabled !== false;
+
   return (
     <Layout>
       <Switch>
@@ -32,7 +37,7 @@ function Router() {
         <Route path="/inbox" component={Inbox} />
         <Route path="/content" component={Content} />
         <Route path="/metrics" component={Metrics} />
-        <Route path="/ambassadors" component={Ambassadors} />
+        <Route path="/ambassadors">{ambassadorsEnabled ? <Ambassadors /> : <Redirect to="/operations/settings" />}</Route>
         <Route path="/calendar" component={Calendar} />
         <Route path="/agent">
           <Redirect to="/operations/overview" />
@@ -123,3 +128,6 @@ function App() {
 }
 
 export default App;
+
+
+

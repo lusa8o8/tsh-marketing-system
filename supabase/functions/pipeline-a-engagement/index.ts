@@ -1,5 +1,6 @@
 import { getAgentDefinition } from '../_shared/agent-registry.ts'
 import { getIntegrationDefinition } from '../_shared/integration-registry.ts'
+import { areAmbassadorsEnabled } from '../_shared/org-capabilities.ts'
 import {
   executePipelineSteps,
   runPipelineExecution,
@@ -64,7 +65,7 @@ function getMockComments(): Comment[] {
       id: 'fb_001',
       platform: getIntegrationDefinition('facebook').id,
       author: 'Chanda Mwale',
-      text: 'This is so helpful! I passed my calculus exam because of TSH 🙌',
+      text: 'This is so helpful. I finally understand the difference now.',
       post_id: 'post_123',
       timestamp: new Date().toISOString(),
     },
@@ -72,7 +73,7 @@ function getMockComments(): Comment[] {
       id: 'fb_002',
       platform: getIntegrationDefinition('facebook').id,
       author: 'Mutale Banda',
-      text: 'How do I access the past papers on StudyHub? I cant find them',
+      text: 'How do I order this? I cannot find the link.',
       post_id: 'post_123',
       timestamp: new Date().toISOString(),
     },
@@ -88,7 +89,7 @@ function getMockComments(): Comment[] {
       id: 'yt_001',
       platform: getIntegrationDefinition('youtube').id,
       author: 'Lombe Phiri',
-      text: 'Please can you do a video on organic chemistry? We are suffering 😭',
+      text: 'Please can you make a short video showing how this is harvested?',
       post_id: 'video_456',
       timestamp: new Date().toISOString(),
     },
@@ -96,7 +97,7 @@ function getMockComments(): Comment[] {
       id: 'yt_002',
       platform: getIntegrationDefinition('youtube').id,
       author: 'Natasha K',
-      text: 'I shared this with my whole class at UNZA. Everyone loves it!',
+      text: 'I shared this with my family group. Everyone loved it.',
       post_id: 'video_456',
       timestamp: new Date().toISOString(),
     },
@@ -104,7 +105,7 @@ function getMockComments(): Comment[] {
       id: 'wa_001',
       platform: getIntegrationDefinition('whatsapp').id,
       author: 'Brian Mwanza',
-      text: 'When is the next exam prep session?',
+      text: 'When will the next batch be ready?',
       post_id: 'channel_789',
       timestamp: new Date().toISOString(),
     },
@@ -163,6 +164,10 @@ function createPipelineASteps(): PipelineExecutableStep<PipelineAState, Pipeline
           kind: 'task',
           id: 'check-ambassadors',
           run: async ({ context }) => {
+            if (!areAmbassadorsEnabled(context.config)) {
+              console.log('Ambassadors module disabled; skipping ambassador checks')
+              return
+            }
             await checkAmbassadors(context.supabase, context.context, context.config.kpi_targets)
           },
         },
@@ -340,7 +345,7 @@ Intent options:
 - boost: testimonial, success story, or brand advocacy worth amplifying
 - routine: question, neutral feedback, general engagement
 
-Audience: ${brandVoice.target_audience ?? 'students'} | Tone: ${brandVoice.tone ?? 'professional'}
+Audience: ${brandVoice.target_audience ?? 'customers and prospects'} | Tone: ${brandVoice.tone ?? 'professional'}
 
 JSON format: {"intent":"spam|complaint|boost|routine","reasoning":"one sentence"}`,
     messages: [
@@ -389,7 +394,7 @@ async function draftReply(
 
 Brand voice:
 - Tone: ${brandVoice.tone ?? 'warm, professional'}
-- Audience: ${brandVoice.target_audience ?? 'university students'}
+- Audience: ${brandVoice.target_audience ?? 'customers and prospects'}
 - Always say: ${(brandVoice.always_say ?? []).join(', ') || 'nothing specific'}
 - Never say: ${(brandVoice.never_say ?? []).join(', ') || 'nothing specific'}
 ${brandVoice.good_post_example ? `\nGood example post: "${brandVoice.good_post_example}"` : ''}
@@ -424,9 +429,9 @@ async function postDailyPoll(
   brandVoice: any,
 ) {
   void anthropic
-  void context
 
-  const pollText = `What would help you most this week from ${brandVoice.name}? A) Past papers B) Video walkthroughs C) Quick revision tips`
+  const brandLabel = brandVoice?.full_name ?? brandVoice?.name ?? 'this brand'
+  const pollText = `What would you like to see more of from ${brandLabel} this week? A) Product tips B) Behind-the-scenes updates C) Special offers`
 
   for (const platform of [getIntegrationDefinition('facebook').id, getIntegrationDefinition('whatsapp').id] as const) {
     await supabase.from('content_registry').insert({

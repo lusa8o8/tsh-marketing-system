@@ -1338,6 +1338,37 @@ Verification:
 - requirements checklist is documented and complete enough to start verification work without rediscovery
 - official-app path is explicit in docs and handoff
 
+Current implementation/progress snapshot (2026-04-15):
+- first M13F universalization shell is verified in browser:
+  - Calendar is now generic (`Event Calendar`, freeform audience tags)
+  - Settings uses generic connection wording instead of StudyHub-specific wording
+  - optional `Ambassadors` and `Affiliates` toggles are present in Settings
+- ambassador module enforcement is partially live and verified:
+  - Ambassadors nav hides when disabled
+  - direct Ambassadors route redirects when disabled
+  - ambassador KPI is hidden when disabled
+  - `pipeline-a-engagement`, `pipeline-b-weekly`, and `pipeline-c-campaign` now skip ambassador workflows when the module is off
+- `pipeline-b-weekly` universalization fix is verified:
+  - hardcoded TSH/StudyHub/UNZA exam-prep mock content removed from the drafting path
+  - Honey Shop now receives business-relevant content drafts
+  - weekly report no longer includes ambassador status when the module is off
+- additional backend universalization already landed:
+  - `pipeline-d-post` no longer hardcodes a StudyHub link for Facebook drafts
+  - `coordinator-chat` now describes legacy `universities` storage as audience tags / segments
+  - `_shared/integration-registry` now labels the old `studyhub` source as `Custom App`
+- remaining verified blocker in the M13F sweep:
+  - `pipeline-a-engagement` still leaks old education-era poll options plus an `undefined` source fallback in one poll-generation path
+  - example: `What would help you most this week from undefined? A) Past papers B) Video walkthroughs C) Quick revision tips`
+- locked next move:
+  - fix the `pipeline-a-engagement` poll-generation path so poll text/options are generic and org-aware
+  - retest Pipeline A before widening the sweep any further
+- first implementation pass was the visible universalization shell:
+  - generic calendar wording and inputs
+  - generic custom-app / product-link wording in Settings
+  - optional module toggles for Ambassadors/Affiliates
+  - hiding disabled optional modules from nav/UI
+- backend enforcement is now partially live; full agent de-registration remains a later pass if needed
+
 Do not include in M13A:
 - analytics pull-back from live platforms (separate milestone)
 - A/B publish variants

@@ -36,7 +36,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 
-const UNI_OPTIONS = ["UNZA", "CBU", "MU", "ZCAS", "DMI"];
+
 
 type EventFormData = {
   event_type: string;
@@ -60,14 +60,6 @@ function EventForm({
   isPending: boolean;
   submitLabel: string;
 }) {
-  const toggleUni = (uni: string) => {
-    onChange({
-      ...value,
-      universities: value.universities.includes(uni)
-        ? value.universities.filter((u) => u !== uni)
-        : [...value.universities, uni],
-    });
-  };
 
   return (
     <form onSubmit={onSubmit} className="space-y-4 pt-4">
@@ -107,7 +99,7 @@ function EventForm({
             min={value.event_date}
             onChange={(e) => onChange({ ...value, event_end_date: e.target.value })}
           />
-          <p className="text-[11px] text-muted-foreground">For multi-day events — exam windows, orientation weeks.</p>
+          <p className="text-[11px] text-muted-foreground">For events that run over several days, like sales windows, conferences, or festivals.</p>
         </div>
       </div>
       <div className="space-y-2">
@@ -115,24 +107,28 @@ function EventForm({
         <Input
           value={value.label}
           onChange={(e) => onChange({ ...value, label: e.target.value })}
-          placeholder="e.g. End of Semester Exams"
+          placeholder="e.g. Grand opening weekend"
           required
         />
       </div>
       <div className="space-y-2">
-        <Label>Universities</Label>
-        <div className="flex flex-wrap gap-2">
-          {UNI_OPTIONS.map((uni) => (
-            <Badge
-              key={uni}
-              variant={value.universities.includes(uni) ? "default" : "outline"}
-              className="cursor-pointer"
-              onClick={() => toggleUni(uni)}
-            >
-              {uni}
-            </Badge>
-          ))}
-        </div>
+        <Label>Audience Tags <span className="text-muted-foreground">(optional)</span></Label>
+        <Input
+          value={value.universities.join(", ")}
+          onChange={(e) =>
+            onChange({
+              ...value,
+              universities: e.target.value
+                .split(",")
+                .map((tag) => tag.trim())
+                .filter(Boolean),
+            })
+          }
+          placeholder="e.g. students, staff, shoppers, vendors"
+        />
+        <p className="text-[11px] text-muted-foreground">
+          Use short labels for the people this event matters to. Leave blank if it is a general event.
+        </p>
       </div>
       {["holiday", "graduation", "other"].includes(value.event_type) && (
         <div className="flex items-start gap-3 rounded-md border border-amber-100 bg-amber-50/50 p-3">
@@ -151,7 +147,7 @@ function EventForm({
         </div>
       )}
       <DialogFooter>
-        <Button type="submit" disabled={isPending || value.universities.length === 0}>
+        <Button type="submit" disabled={isPending}>
           {submitLabel}
         </Button>
       </DialogFooter>
@@ -214,9 +210,9 @@ export default function Calendar() {
       <header className="shrink-0 border-b border-border/80 bg-background/95 px-4 py-4 backdrop-blur md:px-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h1 className="text-xl font-semibold tracking-tight text-foreground">Academic Calendar</h1>
+            <h1 className="text-xl font-semibold tracking-tight text-foreground">Event Calendar</h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Upcoming dates, trigger windows, and university timelines feeding coordinated work.
+              Upcoming dates and trigger windows that samm can plan work around.
             </p>
           </div>
 
@@ -235,7 +231,7 @@ export default function Calendar() {
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>Add Calendar Event</DialogTitle>
+                <DialogTitle>Add Event</DialogTitle>
               </DialogHeader>
               <EventForm
                 value={createForm}
@@ -253,7 +249,7 @@ export default function Calendar() {
       <Dialog open={!!editEvent} onOpenChange={(open) => { if (!open) setEditEvent(null); }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Edit Calendar Event</DialogTitle>
+            <DialogTitle>Edit Event</DialogTitle>
           </DialogHeader>
           <EventForm
             value={editForm}
@@ -274,7 +270,7 @@ export default function Calendar() {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete this event?</AlertDialogTitle>
             <AlertDialogDescription>
-              This cannot be undone. Any pipeline schedules tied to this event will no longer fire.
+              This cannot be undone. Any automations tied to this event will stop using it.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -304,7 +300,7 @@ export default function Calendar() {
           ) : events?.length === 0 ? (
             <div className="py-20 text-center text-muted-foreground">
               <CalendarDays className="mx-auto mb-4 h-12 w-12 opacity-20" />
-              <p>No upcoming academic events.</p>
+              <p>No upcoming events yet.</p>
             </div>
           ) : (
             events?.map((event) => {
@@ -401,3 +397,5 @@ export default function Calendar() {
     </div>
   );
 }
+
+

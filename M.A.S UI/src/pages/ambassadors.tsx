@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { useListAmbassadors, useUpdateAmbassador, useDeleteAmbassador, useCreateAmbassador, getListAmbassadorsQueryKey } from "@/lib/api";
+import { Redirect } from "wouter";
+import { useListAmbassadors, useUpdateAmbassador, useDeleteAmbassador, useCreateAmbassador, getListAmbassadorsQueryKey, useGetOrgConfig } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
 import { Users, Flag, Trash2, Plus } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
@@ -28,6 +29,9 @@ import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 
 export default function Ambassadors() {
+  const { data: config } = useGetOrgConfig();
+  const moduleSettings = ((config?.platform_connections as Record<string, any> | undefined)?.modules ?? {}) as Record<string, { enabled?: boolean }>;
+  const ambassadorsEnabled = moduleSettings.ambassadors?.enabled !== false;
   const { data: ambassadors, isLoading } = useListAmbassadors();
   const queryClient = useQueryClient();
 
@@ -60,6 +64,10 @@ export default function Ambassadors() {
     createMutation.mutate({ data: formData });
   };
 
+  if (!ambassadorsEnabled) {
+    return <Redirect to="/operations/settings" />;
+  }
+
   return (
     <div className="flex flex-col h-full">
       <header className="h-14 border-b px-6 flex items-center justify-between shrink-0 bg-background">
@@ -76,7 +84,7 @@ export default function Ambassadors() {
             <DialogHeader>
               <DialogTitle>Add New Ambassador</DialogTitle>
               <DialogDescription>
-                Register a new student ambassador for the platform.
+                Register a new ambassador record for this workspace.
               </DialogDescription>
             </DialogHeader>
             <form onSubmit={handleCreate} className="space-y-4 pt-4">
@@ -85,7 +93,7 @@ export default function Ambassadors() {
                 <Input id="name" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} required />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="university">University</Label>
+                <Label htmlFor="university">Segment / Group</Label>
                 <Input id="university" value={formData.university} onChange={e => setFormData({ ...formData, university: e.target.value })} required />
               </div>
               <div className="space-y-2">
@@ -108,7 +116,7 @@ export default function Ambassadors() {
             <TableHeader className="bg-muted/50">
               <TableRow>
                 <TableHead>Name</TableHead>
-                <TableHead>University</TableHead>
+                <TableHead>Segment / Group</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Last Check-in</TableHead>
                 <TableHead className="text-right">Weekly Reach</TableHead>
@@ -206,3 +214,4 @@ export default function Ambassadors() {
     </div>
   );
 }
+

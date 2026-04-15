@@ -113,7 +113,7 @@ async function runPlatformAdapters(
 ): Promise<Array<{ platform: string; body: string; subject_line?: string }>> {
 
   const PLATFORM_INSTRUCTIONS: Record<string, string> = {
-    [getIntegrationDefinition('facebook').id]: '2-3 sentences, emoji ok, end with the CTA and StudyHub link',
+    [getIntegrationDefinition('facebook').id]: '2-3 sentences, emoji ok, end with the CTA or primary link if one is available',
     [getIntegrationDefinition('whatsapp').id]: 'under 200 characters, conversational, one clear call to action',
     [getIntegrationDefinition('youtube').id]: 'short community post, ask a question to drive comments',
     [getIntegrationDefinition('email').id]: 'start first line with Subject: then write email body, warm and helpful',

@@ -225,6 +225,33 @@ Rule of thumb:
   - explicit command alias handling for `run pipeline d` is still missing, so that phrasing can still fall through to the LLM path instead of returning a deterministic guided response
 - Next narrow fix: add deterministic `run pipeline d` guidance and lightweight Pipeline D last-run visibility in Operations without introducing `pipeline_runs` for Pipeline D.
 
+## Current M13F Diagnosis
+- `M13F` is now in active universalization/modularity work, not just compliance planning.
+- Verified M13F progress so far:
+  - Calendar UI is now generic (`Event Calendar`, freeform audience tags instead of fixed university chips).
+  - Settings now uses generic wording (`Connections & Modules`, `Custom App / Private Tool`, `Product / Landing Page`).
+  - Optional module toggles exist in Settings for `Ambassadors` and `Affiliates`.
+  - `Ambassadors` now behaves like a real optional module in the product shell:
+    - hidden from nav when disabled
+    - direct `/ambassadors` route redirects to Settings when disabled
+    - ambassador KPI field is hidden when disabled
+  - backend ambassador enforcement is partially live:
+    - `pipeline-a-engagement`, `pipeline-b-weekly`, and `pipeline-c-campaign` now skip ambassador workflows when the module is off
+  - `pipeline-b-weekly` hardcoded TSH/StudyHub mock content has been replaced with generic org-aware fallback content
+  - `pipeline-b-weekly` weekly report no longer includes ambassador status when the module is off
+  - `pipeline-d-post` Facebook drafting no longer hardcodes a StudyHub link
+  - `coordinator-chat` calendar instructions now treat the legacy `universities` field as generic audience tags / segments
+  - `_shared/integration-registry` now exposes the old `studyhub` source as generic `Custom App` wording
+- Browser/runtime verification completed in Honey Shop:
+  - Ambassadors toggle off: nav hidden, route gated, KPI hidden, no ambassador-targeted generation triggered
+  - Pipeline B now drafts Honey Shop-relevant content instead of UNZA/StudyHub exam-prep content
+  - Pipeline D remains clean after universalization changes
+- Remaining M13F gap discovered during verification:
+  - `pipeline-a-engagement` still leaks old education-era poll options and an `undefined` brand/source fallback in one poll path
+  - example leak: `What would help you most this week from undefined? A) Past papers B) Video walkthroughs C) Quick revision tips`
+- Locked next move:
+  - fix `pipeline-a-engagement` poll-generation fallback/options so they are generic and brand-aware
+  - then continue the backend sweep only if more education-first runtime leaks remain after re-test
 ## Landing Page / Compliance Note
 - Add landing page requirements to the `M13` series as part of `M13F`.
 - Minimum assets to prepare:
