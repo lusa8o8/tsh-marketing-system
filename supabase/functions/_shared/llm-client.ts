@@ -2,6 +2,8 @@ import Anthropic from 'https://esm.sh/@anthropic-ai/sdk@0.27.0'
 
 export type LlmTask =
   | 'coordinator'
+  | 'classifier'
+  | 'reply_writer'
   | 'one_off_writer'
 
 type TextMessage = {
@@ -30,6 +32,18 @@ const TASK_CONFIG: Record<LlmTask, { model: string; maxTokens: number; retries: 
   coordinator: {
     model: 'claude-sonnet-4-20250514',
     maxTokens: 600,
+    retries: 2,
+    retryDelayMs: 700,
+  },
+  classifier: {
+    model: 'claude-haiku-4-5-20251001',
+    maxTokens: 128,
+    retries: 2,
+    retryDelayMs: 700,
+  },
+  reply_writer: {
+    model: 'claude-haiku-4-5-20251001',
+    maxTokens: 200,
     retries: 2,
     retryDelayMs: 700,
   },

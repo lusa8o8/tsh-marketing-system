@@ -8,7 +8,10 @@ import {
 } from '../_shared/pipeline-engine.ts'
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import Anthropic from 'https://esm.sh/@anthropic-ai/sdk@0.27.0'
+import {
+  createAnthropicClient,
+  generateTextWithAnthropic,
+} from '../_shared/llm-client.ts'
 
 interface Comment {
   id: string
@@ -42,7 +45,7 @@ interface PipelineAState {
 
 interface PipelineAEngineContext {
   supabase: any
-  anthropic: Anthropic
+  anthropic: ReturnType<typeof createAnthropicClient>
   context: PipelineContext
   config: any
   brandVoice: any
@@ -188,9 +191,7 @@ Deno.serve(async (req) => {
     Deno.env.get('SUPABASE_URL')!,
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
   )
-  const anthropic = new Anthropic({
-    apiKey: Deno.env.get('ANTHROPIC_API_KEY')!,
-  })
+  const anthropic = createAnthropicClient(Deno.env.get('ANTHROPIC_API_KEY')!)
 
   const payload = await req.json().catch(() => ({}))
   const context: PipelineContext = {
@@ -330,14 +331,14 @@ async function processComment(
 }
 
 async function classifyComment(
-  anthropic: Anthropic,
+  anthropic: ReturnType<typeof createAnthropicClient>,
   comment: Comment,
   brandVoice: any,
 ): Promise<ClassifiedComment> {
-  const response = await anthropic.messages.create({
-    model: 'claude-haiku-4-5-20251001',
-    max_tokens: 128,
-    system: `Classify social media comments. Reply with JSON only — no markdown, no explanation.
+  const response = await generateTextWithAnthropic(anthropic, {
+    task: 'classifier',
+    maxTokens: 128,
+    system: `Classify social media comments. Reply with JSON only ??? no markdown, no explanation.
 
 Intent options:
 - spam: bot, promo link, fake account, unsolicited ad (any shortened URL = spam)
@@ -351,13 +352,15 @@ JSON format: {"intent":"spam|complaint|boost|routine","reasoning":"one sentence"
     messages: [
       {
         role: 'user',
-        content: `Platform: ${comment.platform}\nAuthor: ${comment.author}\nComment: ${comment.text}`,
+        content: `Platform: ${comment.platform}
+Author: ${comment.author}
+Comment: ${comment.text}`,
       },
     ],
   })
 
   const raw = response.content[0].type === 'text' ? response.content[0].text.trim() : ''
-  // Strip markdown code fences — model sometimes wraps JSON in ```json ... ``` despite instructions
+  // Strip markdown code fences ??? model sometimes wraps JSON in ```json ... ``` despite instructions
   const jsonStr = raw
     .replace(/^```(?:json)?\s*/i, '')
     .replace(/\s*```\s*$/m, '')
@@ -371,12 +374,12 @@ JSON format: {"intent":"spam|complaint|boost|routine","reasoning":"one sentence"
     return { ...comment, intent: parsed.intent, reasoning: parsed.reasoning }
   } catch {
     console.warn('classifyComment parse failed, defaulting to routine. Raw:', raw)
-    return { ...comment, intent: 'routine', reasoning: 'Classification parse error — treated as routine.' }
+    return { ...comment, intent: 'routine', reasoning: 'Classification parse error ??? treated as routine.' }
   }
 }
 
 async function draftReply(
-  anthropic: Anthropic,
+  anthropic: ReturnType<typeof createAnthropicClient>,
   comment: ClassifiedComment,
   brandVoice: any,
 ): Promise<string> {
@@ -387,9 +390,9 @@ async function draftReply(
     spam: '',
   }
 
-  const response = await anthropic.messages.create({
-    model: 'claude-haiku-4-5-20251001',
-    max_tokens: 200,
+  const response = await generateTextWithAnthropic(anthropic, {
+    task: 'reply_writer',
+    maxTokens: 200,
     system: `You are a community manager replying to social media comments on behalf of this organisation.
 
 Brand voice:
@@ -397,10 +400,11 @@ Brand voice:
 - Audience: ${brandVoice.target_audience ?? 'customers and prospects'}
 - Always say: ${(brandVoice.always_say ?? []).join(', ') || 'nothing specific'}
 - Never say: ${(brandVoice.never_say ?? []).join(', ') || 'nothing specific'}
-${brandVoice.good_post_example ? `\nGood example post: "${brandVoice.good_post_example}"` : ''}
+${brandVoice.good_post_example ? `
+Good example post: "${brandVoice.good_post_example}"` : ''}
 
 Rules:
-- The commenter's name is "${comment.author}". If it looks like a real given name (e.g. "Chanda Mwale" → address as "Chanda"), use the first name. If the name appears to be a handle or descriptor (e.g. "Angry Student", "User123"), open with "Hi there" or another warm neutral greeting instead.
+- The commenter's name is "${comment.author}". If it looks like a real given name (e.g. "Chanda Mwale" ??? address as "Chanda"), use the first name. If the name appears to be a handle or descriptor (e.g. "Angry Student", "User123"), open with "Hi there" or another warm neutral greeting instead.
 - Maximum 2 sentences
 - No hashtags
 - Plain conversational text only`,
@@ -418,13 +422,13 @@ Write the reply:`,
     ],
   })
 
-  const reply = response.content[0].type === 'text' ? response.content[0].text.trim() : `Hi there, thanks for reaching out — please DM us for more details.`
+  const reply = response.content[0].type === 'text' ? response.content[0].text.trim() : `Hi there, thanks for reaching out ??? please DM us for more details.`
   return reply
 }
 
 async function postDailyPoll(
   supabase: any,
-  anthropic: Anthropic,
+  anthropic: ReturnType<typeof createAnthropicClient>,
   context: PipelineContext,
   brandVoice: any,
 ) {
