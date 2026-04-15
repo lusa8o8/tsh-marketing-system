@@ -5,7 +5,10 @@
 // ─────────────────────────────────────────────────────────────────────
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import Anthropic from 'https://esm.sh/@anthropic-ai/sdk@0.27.0'
+import {
+  createAnthropicClient,
+  generateTextWithAnthropic,
+} from '../_shared/llm-client.ts'
 import { getAgentDefinition } from '../_shared/agent-registry.ts'
 import { INTEGRATION_REGISTRY, getIntegrationDefinition } from '../_shared/integration-registry.ts'
 import { PIPELINE_RUN_STATUS } from '../_shared/pipeline-run-status.ts'
@@ -94,9 +97,7 @@ Deno.serve(async (req) => {
     Deno.env.get('SUPABASE_URL')!,
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
   )
-  const anthropic = new Anthropic({
-    apiKey: Deno.env.get('ANTHROPIC_API_KEY')!
-  })
+  const anthropic = createAnthropicClient(Deno.env.get('ANTHROPIC_API_KEY')!)
 
   const payload = await req.json().catch(() => ({}))
   const orgId: string = payload?.orgId ?? payload?.org_id ?? 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'
@@ -108,32 +109,16 @@ Deno.serve(async (req) => {
       ? payload.resumeRunId
       : null
 
-  // Resolve the calendar event context:
-  // 1. Use payload.calendarEvent if passed (NL calendar-triggered run)
-  // 2. Query academic_calendar for the next upcoming event (standalone "run the campaign pipeline")
-  // 3. Error — no upcoming event exists; do not silently fall back to a demo event
-  let resolvedCalendarEvent: CalendarEvent | undefined
-  if (payload?.calendarEvent) {
-    resolvedCalendarEvent = payload.calendarEvent as CalendarEvent
-  } else if (!resumeRunId) {
-    // Only query for next event on a fresh run; resume uses the stored event from pipeline_runs.result
-    resolvedCalendarEvent = await getNextCalendarEvent(supabase, orgId, today)
-  }
-
-  const context: PipelineContext = {
+  let context: PipelineContext = {
     orgId,
     today,
-    calendarEvent: resolvedCalendarEvent,
+    calendarEvent: undefined,
   }
-
-  const config = await getOrgConfig(supabase, context.orgId)
-
-  if (resumeRunId) {
-    return await resumePipelineCRun({ supabase, anthropic, context, config, runId: resumeRunId })
-  }
+  let config: any = null
 
   let runId: string | null = null
   const results: PipelineCResults = {
+
     research_completed: false,
     campaign_brief_sent: false,
     campaign_name: '',
@@ -149,12 +134,38 @@ Deno.serve(async (req) => {
   }
 
   try {
+    // Resolve the calendar event context:
+    // 1. Use payload.calendarEvent if passed (NL calendar-triggered run)
+    // 2. Query academic_calendar for the next upcoming event (standalone "run the campaign pipeline")
+    // 3. Error ??? no upcoming event exists; do not silently fall back to a demo event
+    let resolvedCalendarEvent: CalendarEvent | undefined
+    if (payload?.calendarEvent) {
+      resolvedCalendarEvent = payload.calendarEvent as CalendarEvent
+    } else if (!resumeRunId) {
+      // Only query for next event on a fresh run; resume uses the stored event from pipeline_runs.result
+      resolvedCalendarEvent = await getNextCalendarEvent(supabase, orgId, today)
+    }
+
+    context = {
+      orgId,
+      today,
+      calendarEvent: resolvedCalendarEvent,
+    }
+
+    config = await getOrgConfig(supabase, context.orgId)
+
+    if (resumeRunId) {
+      return await resumePipelineCRun({ supabase, anthropic, context, config, runId: resumeRunId })
+    }
+
     runId = await createPipelineCRun(supabase, context.orgId)
 
     const event = context.calendarEvent
     if (!event) {
       throw new Error('No calendar event provided — Pipeline C requires a trigger event')
     }
+
+    results.calendar_event = event
 
     console.log(`Pipeline C triggered for: ${event.label}`)
 
@@ -298,7 +309,7 @@ async function updatePipelineCRun(supabase: any, runId: string | null, status: s
   if (error) throw new Error(`Failed to update Pipeline C run: ${error.message}`)
 }
 
-async function resumePipelineCRun(params: { supabase: any; anthropic: Anthropic; context: PipelineContext; config: any; runId: string }) {
+async function resumePipelineCRun(params: { supabase: any; anthropic: ReturnType<typeof createAnthropicClient>; context: PipelineContext; config: any; runId: string }) {
   const { supabase, anthropic, context, config, runId } = params
   const run = await loadPipelineCRun(supabase, context.orgId, runId)
 
@@ -484,7 +495,7 @@ async function resumePipelineCRun(params: { supabase: any; anthropic: Anthropic;
 
 async function runPerformanceAnalyser(
   supabase: any,
-  anthropic: Anthropic,
+  anthropic: ReturnType<typeof createAnthropicClient>,
   context: PipelineContext
 ) {
   const { data: metrics } = await supabase
@@ -502,9 +513,9 @@ async function runPerformanceAnalyser(
     .order('published_at', { ascending: false })
     .limit(10)
 
-  const response = await anthropic.messages.create({
-    model: 'claude-sonnet-4-5',
-    max_tokens: 300,
+  const response = await generateTextWithAnthropic(anthropic, {
+    task: 'performance_analyst',
+    maxTokens: 300,
     system: `Analyse this workspace's marketing performance data and provide a brief summary.
 Respond with JSON: { "summary": "...", "top_platform": "...", "key_insight": "..." }`,
     messages: [{
@@ -523,12 +534,12 @@ Recent posts: ${JSON.stringify(recentPosts?.slice(0, 5))}`
 // The brief payload includes competitor_insights_source: 'simulated' so the
 // CEO reviewing the brief can see this clearly. Replace with real data in M-vision.
 async function runCompetitorResearcher(
-  anthropic: Anthropic,
+  anthropic: ReturnType<typeof createAnthropicClient>,
   event: CalendarEvent
 ) {
-  const response = await anthropic.messages.create({
-    model: 'claude-sonnet-4-5',
-    max_tokens: 200,
+  const response = await generateTextWithAnthropic(anthropic, {
+    task: 'competitor_researcher',
+    maxTokens: 200,
     system: `You are a competitor research analyst for an EdTech company in Zambia.
 Provide plausible competitor insights for campaign planning based on the event type and universities.
 Respond with JSON: { "insights": "...", "opportunity": "..." }`,
@@ -567,7 +578,7 @@ async function runAmbassadorReporter(supabase: any, context: PipelineContext) {
 
 // ── campaign planner ──────────────────────────────────────────────────
 async function runCampaignPlanner(
-  anthropic: Anthropic,
+  anthropic: ReturnType<typeof createAnthropicClient>,
   event: CalendarEvent,
   perfData: any,
   competitorData: any,
@@ -583,9 +594,9 @@ async function runCampaignPlanner(
   // Prevents the model from proposing 30-day campaigns for events 3 weeks away.
   const maxDurationDays = Math.min(daysUntilEvent, 14)
 
-  const response = await anthropic.messages.create({
-    model: 'claude-sonnet-4-5',
-    max_tokens: 1000,
+  const response = await generateTextWithAnthropic(anthropic, {
+    task: 'campaign_strategist',
+    maxTokens: 1000,
     system: `You are the campaign strategist for this workspace.
 Create a focused campaign brief for the upcoming event.
 Respond with JSON only matching this structure exactly:
@@ -628,14 +639,14 @@ Create the campaign brief.`
 // Phase 1: produces the verbatim source-of-truth message for the campaign.
 // All platform adapters in phase 2 must use these fields exactly as written.
 async function runCanonicalCopyWriter(
-  anthropic: Anthropic,
+  anthropic: ReturnType<typeof createAnthropicClient>,
   brief: CampaignBrief,
   event: CalendarEvent,
   brandVoice: any
 ): Promise<{ headline: string; core_body: string; exact_cta: string; key_fact: string }> {
-  const response = await anthropic.messages.create({
-    model: 'claude-sonnet-4-5',
-    max_tokens: 300,
+  const response = await generateTextWithAnthropic(anthropic, {
+    task: 'canonical_copywriter',
+    maxTokens: 300,
     system: `${buildSystemPrompt(brandVoice)}
 
 You are writing the canonical campaign message that will be adapted across all platforms.
@@ -670,7 +681,7 @@ Write the canonical campaign message now.`
 // Platform adapters may change format, length, and tone only.
 // headline, exact_cta, and key_fact must appear verbatim in every asset.
 async function runCopyWriter(
-  anthropic: Anthropic,
+  anthropic: ReturnType<typeof createAnthropicClient>,
   brief: CampaignBrief,
   event: CalendarEvent,
   brandVoice: any,
@@ -689,9 +700,9 @@ async function runCopyWriter(
   const results = await Promise.all(
     platforms.map(async (p, index) => {
       try {
-        const response = await anthropic.messages.create({
-          model: 'claude-sonnet-4-5',
-          max_tokens: 200,
+        const response = await generateTextWithAnthropic(anthropic, {
+          task: 'platform_copywriter',
+          maxTokens: 200,
           system: `${buildSystemPrompt(brandVoice)}
 
 Write ONLY the post copy — no JSON, no quotes around it, no preamble.
@@ -749,7 +760,7 @@ Write the copy now.`
 // hallucinate palette, fonts, or layout. creative_override_allowed loosens
 // palette constraints for celebratory event types only.
 async function runDesignBriefAgent(
-  anthropic: Anthropic,
+  anthropic: ReturnType<typeof createAnthropicClient>,
   brief: CampaignBrief,
   event: CalendarEvent,
   brandVisual: any,
@@ -804,9 +815,9 @@ ${(socialHandles.custom_app_url ?? socialHandles.studyhub_url) ? `- Product / La
     ? `\nBRAND SPEC (written by brand manager — apply exactly)\n${markdownDesignSpec}`
     : ''
 
-  const response = await anthropic.messages.create({
-    model: 'claude-sonnet-4-5',
-    max_tokens: 500,
+  const response = await generateTextWithAnthropic(anthropic, {
+    task: 'design_brief_writer',
+    maxTokens: 500,
     system: `Write a concise design brief for a campaign visual asset.
 Plain text only. No markdown, no asterisks, no bold, no headers. Use plain bullet points with a dash (-). Under 250 words.
 You MUST include: exact brand colors, font names, logo file location, exact social handles, exact CTA URL, and platform dimensions exactly as specified. Do not substitute, invent, or omit any of these values.`,
@@ -835,7 +846,7 @@ Write the design brief for the graphic designer.`
 // ── monitor ───────────────────────────────────────────────────────────
 async function runMonitor(
   supabase: any,
-  anthropic: Anthropic,
+  anthropic: ReturnType<typeof createAnthropicClient>,
   context: PipelineContext,
   brief: CampaignBrief,
   kpiTargets: any
@@ -862,9 +873,9 @@ async function runMonitor(
   // Real post-performance monitoring belongs in a scheduled check after M13 publishing.
   const weeklySignupBenchmark = kpiTargets?.weekly_signups ?? brief.expected_signups
 
-  const response = await anthropic.messages.create({
-    model: 'claude-sonnet-4-5',
-    max_tokens: 200,
+  const response = await generateTextWithAnthropic(anthropic, {
+    task: 'campaign_monitor',
+    maxTokens: 200,
     system: `You are reviewing a campaign setup before it goes live. Posts have been approved but not yet published.
 Check whether the campaign configuration is coherent and ready to execute.
 Consider: are KPI targets set, is the campaign window realistic, does the goal match the event?
@@ -908,7 +919,7 @@ Platform metrics baseline: ${JSON.stringify(metrics?.slice(0, 4))}`
 // ── post-campaign report ──────────────────────────────────────────────
 async function runPostCampaignReport(
   supabase: any,
-  anthropic: Anthropic,
+  anthropic: ReturnType<typeof createAnthropicClient>,
   context: PipelineContext,
   brief: CampaignBrief,
   pipelineResults: any
@@ -920,9 +931,9 @@ async function runPostCampaignReport(
     .order('snapshot_date', { ascending: false })
     .limit(4)
 
-  const response = await anthropic.messages.create({
-    model: 'claude-sonnet-4-5',
-    max_tokens: 400,
+  const response = await generateTextWithAnthropic(anthropic, {
+    task: 'campaign_reporter',
+    maxTokens: 400,
     system: `Write a concise post-campaign report for the business owner or operator.
 Plain text, under 200 words. Cover: what ran, results vs goal, key lesson, recommendation.`,
     messages: [{

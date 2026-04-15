@@ -8,6 +8,14 @@ export type LlmTask =
   | 'weekly_copywriter'
   | 'ambassador_writer'
   | 'weekly_reporter'
+  | 'performance_analyst'
+  | 'competitor_researcher'
+  | 'campaign_strategist'
+  | 'canonical_copywriter'
+  | 'platform_copywriter'
+  | 'design_brief_writer'
+  | 'campaign_monitor'
+  | 'campaign_reporter'
   | 'one_off_writer'
 
 type TextMessage = {
@@ -72,6 +80,54 @@ const TASK_CONFIG: Record<LlmTask, { model: string; maxTokens: number; retries: 
   weekly_reporter: {
     model: 'claude-sonnet-4-5',
     maxTokens: 500,
+    retries: 2,
+    retryDelayMs: 700,
+  },
+  performance_analyst: {
+    model: 'claude-sonnet-4-5',
+    maxTokens: 300,
+    retries: 2,
+    retryDelayMs: 700,
+  },
+  competitor_researcher: {
+    model: 'claude-sonnet-4-5',
+    maxTokens: 200,
+    retries: 2,
+    retryDelayMs: 700,
+  },
+  campaign_strategist: {
+    model: 'claude-sonnet-4-5',
+    maxTokens: 1000,
+    retries: 2,
+    retryDelayMs: 700,
+  },
+  canonical_copywriter: {
+    model: 'claude-sonnet-4-5',
+    maxTokens: 300,
+    retries: 2,
+    retryDelayMs: 700,
+  },
+  platform_copywriter: {
+    model: 'claude-sonnet-4-5',
+    maxTokens: 200,
+    retries: 2,
+    retryDelayMs: 700,
+  },
+  design_brief_writer: {
+    model: 'claude-sonnet-4-5',
+    maxTokens: 500,
+    retries: 2,
+    retryDelayMs: 700,
+  },
+  campaign_monitor: {
+    model: 'claude-sonnet-4-5',
+    maxTokens: 200,
+    retries: 2,
+    retryDelayMs: 700,
+  },
+  campaign_reporter: {
+    model: 'claude-sonnet-4-5',
+    maxTokens: 400,
     retries: 2,
     retryDelayMs: 700,
   },

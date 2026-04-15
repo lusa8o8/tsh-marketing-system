@@ -382,6 +382,28 @@ async function schedulePipelineRun(
     }
   }
 
+  if (pipeline.id === 'pipeline-c-campaign' && !eventContext) {
+    const today = new Date().toISOString().slice(0, 10)
+    const { data: nextEvents, error } = await supabase
+      .from('academic_calendar')
+      .select('id, label, event_date')
+      .eq('org_id', orgId)
+      .gte('event_date', today)
+      .order('event_date', { ascending: true })
+      .limit(1)
+
+    if (error) {
+      throw new Error(`Failed to check calendar events: ${error.message}`)
+    }
+
+    if (!nextEvents?.[0]) {
+      return {
+        message: 'Pipeline C needs a future event before it can start. Add an event to the calendar first, then run the campaign again.',
+        suggestions: ['Add a calendar event for next week', 'Show upcoming events', 'Create a campaign for my next event'],
+      }
+    }
+  }
+
   // Build the invoke body. When eventContext is provided (calendar-triggered run),
   // pass it as calendarEvent so pipeline-c campaigns for the specific event named
   // by the user rather than querying for the next due event from the DB.

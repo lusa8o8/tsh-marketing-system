@@ -281,13 +281,38 @@ Rule of thumb:
     - `Running copy writer...`
     - `Sending drafts to Content Registry for approval...`
     - `9 drafts sent to Content Registry`
-  - no new runtime error surfaced in the migration
+  - post-approval resume bug was then discovered and fixed:
+    - `runReporter(...)` referenced `config` without receiving it
+    - verified fix: Pipeline B now resumes cleanly after draft approval
+    - logs confirm:
+      - `Ambassadors module disabled; skipping ambassador update`
+      - `Weekly report sent to human inbox`
+- `M13G` pass 5 is now verified in browser and Supabase.
+  - `pipeline-c-campaign` now uses the shared client for:
+    - performance analysis
+    - competitor research
+    - campaign planning
+    - canonical copy generation
+    - platform copy generation
+    - design brief writing
+    - campaign monitoring
+    - campaign reporting
+  - direct Anthropic instantiation was removed from Pipeline C
+  - additional runtime fixes were required and are now verified:
+    - standalone `run pipeline c` now prechecks for a future event and tells the user to add one first
+    - Pipeline C no longer throws a blank `500` when no future event exists
+    - resume now persists `calendar_event` before the first human gate, fixing the missing stored context failure
+    - coordinator event creation instructions now explicitly forbid inventing campuses or universities when the user did not specify them
+  - verified result:
+    - campaign brief lands in Inbox
+    - approving the brief resumes correctly
+    - `6 copy assets landed in Content Registry as drafts ? waiting for marketer approval`
 - Remaining non-adapter issue observed during the series:
   - Content Registry still lacks day segmentation / obvious drafted-at freshness on cards
   - this is a separate UI polish, not an adapter blocker
 - Locked next move:
-  - commit `M13G` pass 4 as a successful shared-adapter migration
-  - if the adapter series continues, migrate `pipeline-c-campaign` next before broadening the shared interface further
+  - commit the stabilized `M13G` pass 5 checkpoint
+  - if the adapter series continues, decide whether to migrate the next direct LLM surface or broaden the shared helper only when a real need appears
 
 ## Landing Page / Compliance Note
 - Add landing page requirements to the `M13` series as part of `M13F`.

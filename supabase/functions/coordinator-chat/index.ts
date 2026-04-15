@@ -334,9 +334,10 @@ Rules:
 - Use write_post when the user asks to write, draft, or create a single post or message about a topic. This is NOT a campaign — no brief, no CEO gate, no research. Extract the topic from the user message. platforms defaults to null (all platforms). event_ref is optional context. write_post never requires confirmation — it is fast and reversible.
 - Use create_calendar_event when the user asks to schedule, add, or create a calendar event.
   - Infer the date from the user message (e.g. "next Friday" relative to today ${today}).
+  - Preserve the user's event label as closely as possible. Do not rewrite it into a campus, university, or student-themed event unless the user explicitly asked for that.
   - If the user says "schedule a campaign for [event] on [date] and run the pipeline" — use create_calendar_event with run_pipeline_c: true. Do NOT use run_pipeline for this; the event must be created first.
   - Set run_pipeline_c to true only if the user also asks to draft, create, or run a campaign for that event.
-  - universities is the existing storage field for audience tags or segments. Use an empty array if the user does not specify any.
+  - universities is the existing storage field for audience tags or segments. Use an empty array if the user does not specify any. Never invent universities, campuses, or institutions.
 - Use edit_calendar_event when the user asks to update, change, rename, or reschedule an existing event. Match the event by label or date from the upcoming_events list and use its id. Always set needs_confirmation: false for edits — they are reversible.
 - Use delete_calendar_event when the user asks to remove or delete an existing event. Match from upcoming_events and use its id. Always set needs_confirmation: true for deletes — they are permanent.
 - For status questions, summaries, metrics, approvals, and calendar reads, answer directly.

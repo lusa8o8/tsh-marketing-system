@@ -1415,7 +1415,7 @@ Progress:
   - `pipeline-a-engagement` migrated to the shared client for comment classification and reply drafting
   - deployment succeeded and the function returned `200`
   - logs confirm daily poll posting, ambassador gating, and metrics snapshot behavior remained stable
-- pass 4 verified in browser and Supabase:
+- pass 4 verified and stabilized:
   - `pipeline-b-weekly` migrated to the shared client for:
     - weekly planner
     - weekly copy writer
@@ -1427,7 +1427,32 @@ Progress:
     - `Running copy writer...`
     - `Sending drafts to Content Registry for approval...`
     - `9 drafts sent to Content Registry`
-  - no adapter regression surfaced in the migration
+  - post-approval resume bug was then discovered and fixed:
+    - `runReporter(...)` referenced `config` without receiving it
+    - verified fix: Pipeline B now resumes cleanly after draft approval
+    - logs confirm:
+      - `Ambassadors module disabled; skipping ambassador update`
+      - `Weekly report sent to human inbox`
+- pass 5 verified in browser and Supabase:
+  - `pipeline-c-campaign` migrated to the shared client for:
+    - performance analyst
+    - competitor researcher
+    - campaign strategist
+    - canonical copywriter
+    - platform copywriter
+    - design brief writer
+    - campaign monitor
+    - campaign reporter
+  - direct Anthropic instantiation removed from Pipeline C
+  - additional runtime fixes were required and are now verified:
+    - standalone `run pipeline c` now prechecks for a future event and tells the user to add one first
+    - Pipeline C no longer throws a blank `500` when no future event exists
+    - resume now persists `calendar_event` before the first human gate, fixing the missing stored context failure
+    - coordinator event creation instructions now explicitly forbid inventing campuses or universities when the user did not specify them
+  - verified result:
+    - campaign brief lands in Inbox
+    - approving the brief resumes correctly
+    - `6 copy assets landed in Content Registry as drafts ? waiting for marketer approval`
 
 Verified distinction:
 - the temporary confusion around a missing discounts draft was not a shared-adapter regression
@@ -1441,10 +1466,11 @@ Current shared-client coverage:
 - pipeline-d-post
 - pipeline-a-engagement
 - pipeline-b-weekly
+- pipeline-c-campaign
 
 Next narrow move:
-- migrate `pipeline-c-campaign` to the shared client next
-- keep the adapter surface narrow unless Pipeline C proves a real need for JSON/helper expansion
+- decide whether any remaining direct LLM surface still needs migration
+- keep the adapter surface narrow unless a real need appears for shared JSON/helper expansion
 - treat Content Registry freshness/day grouping as a separate UI polish, not part of M13G success criteria
 
 ---

@@ -453,7 +453,7 @@ async function resumePipelineBRun(params: {
     }
 
     if (!results.report_generated) {
-      await runReporter(supabase, anthropic, context, lastWeekMetrics ?? [], results)
+      await runReporter(supabase, anthropic, context, lastWeekMetrics ?? [], results, config)
       results.report_generated = true
     }
 
@@ -671,7 +671,8 @@ async function runReporter(
   anthropic: ReturnType<typeof createAnthropicClient>,
   context: PipelineContext,
   metrics: any[],
-  pipelineResults: any
+  pipelineResults: any,
+  config: any
 ) {
   const response = await generateTextWithAnthropic(anthropic, {
     task: 'weekly_reporter',
