@@ -30,7 +30,7 @@ export default function Privacy() {
         <p className="text-[11px] font-semibold lowercase tracking-[0.24em] text-foreground/55">samm</p>
         <h1 className="mt-4 text-4xl font-semibold tracking-tight text-[#0b0b0c]">Privacy Policy</h1>
         <p className="mt-4 text-sm leading-7 text-muted-foreground">
-          This page explains the broad principles for how samm handles account, workspace, and content information while the product continues to evolve.
+          This is how samm handles account, workspace, and content information across the product.
         </p>
 
         <div className="mt-10 space-y-8">

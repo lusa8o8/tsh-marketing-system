@@ -299,8 +299,8 @@ export default function Landing() {
             <p className="text-[11px] font-semibold lowercase tracking-[0.24em] text-white/45">samm</p>
             <h2 className="mt-4 text-3xl font-semibold tracking-tight text-[#f5f3ef]">A marketing workspace built to buy back time.</h2>
             <p className="mt-4 max-w-2xl text-sm leading-7 text-white/72">
-              samm helps teams plan campaigns, approve content, and keep execution moving from one place. Built in Lusaka,
-              Zambia for small teams that need calm control over real marketing work.
+              samm helps teams plan campaigns, approve content, and keep execution moving from one place. Built for small
+              teams that need calm control over real marketing work.
             </p>
 
             <div className="mt-6 flex flex-col gap-3 text-sm text-white/72 sm:flex-row sm:items-center sm:gap-6">
@@ -314,7 +314,7 @@ export default function Landing() {
               </div>
               <div className="flex items-center gap-2">
                 <ShieldCheck className="h-4 w-4" />
-                <span>Public product and business contact page for getsamm.app</span>
+                <span>Product information, legal details, and business contact information</span>
               </div>
             </div>
           </div>

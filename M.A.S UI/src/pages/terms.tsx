@@ -30,7 +30,7 @@ export default function Terms() {
         <p className="text-[11px] font-semibold lowercase tracking-[0.24em] text-foreground/55">samm</p>
         <h1 className="mt-4 text-4xl font-semibold tracking-tight text-[#0b0b0c]">Terms of Service</h1>
         <p className="mt-4 text-sm leading-7 text-muted-foreground">
-          These terms describe the general rules for using samm as a marketing workflow product while the platform continues to mature.
+          These are the general rules for using samm as a marketing workflow product.
         </p>
 
         <div className="mt-10 space-y-8">
