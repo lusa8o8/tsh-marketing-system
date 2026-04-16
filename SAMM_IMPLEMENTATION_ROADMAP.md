@@ -1476,6 +1476,16 @@ Current conclusion:
 - `M13G` backend adapter migration is complete for the current LLM-backed surfaces
 - remaining LLM work is adapter maturation only (shared JSON policy, routing, observability, future provider overrides)
 - treat Content Registry freshness/day grouping and remaining calendar/UI cleanup as separate slices, not part of M13G success criteria
+- Meta/identity foundation progress now logged:
+  - `getsamm.app` business portfolio created
+  - `Samm` Facebook Page created
+  - `getsamm.app` domain added
+  - personal verification completed for Lusa Malingusha
+  - PACRA name clearance submitted and pending
+- landing/public-site decision locked before code work:
+  - preserve the current auth experience in `login.tsx`
+  - build a separate public landing page for Meta/compliance/business-proof needs
+  - fix leftover browser-title branding (`TSH Marketing OS`) as part of that public-site slice, not by overloading the auth screen
 
 ---
 ## Milestone 14: Multi-Channel Samm Access
@@ -1595,11 +1605,11 @@ Reason:
 Milestones M11A through M11F and M12 are complete. All brand, scheduling, and one-off post infrastructure is in place.
 
 Next highest-leverage work:
-1. **M13A Facebook Live Publishing** - active live verification slice. Internal scheduler/runtime/config blockers are largely cleared; the current blocker is Facebook `403 (#200)` permission/compliance, not missing local wiring.
-2. **M13E Coordinator intent normalization** - lock the lightweight intent layer before later `samm` chat integrations widen the NL surface area.
-3. **M13F Platform compliance foundation** - prepare the official app, business-verification, and landing-page path in parallel with adapter work.
+1. **M13H Meta production identity + compliance** - active external setup slice. Current status: `getsamm.app` Meta business portfolio exists, `Samm` Page exists, personal verification succeeded, PACRA name clearance submitted; blocker is waiting for formal registration documents before organization verification.
+2. **Landing/public-site split** - when code work starts, keep `login.tsx` as the auth page and build a separate public landing page for Meta/business-proof content, legal links, and contact details.
+3. **Content Registry freshness polish** - treat day grouping and clearer drafted-at freshness as a separate UI slice after the Meta/compliance identity track is stable.
 4. **Canva AI close-the-loop test** - run a campaign with brand_visual + social handles filled in Settings and verify Canva AI completes a design without follow-up questions.
-5. **Pending test queue** - work through the pending items in the Test Status section above and update each to verified as it passes in the browser.
+5. **Adapter maturation** - shared JSON policy, provider routing, observability, and future provider overrides are the remaining LLM follow-on work; no more backend surface migrations are required right now.
 
 ## Commit Strategy
 Recommended commit pattern:

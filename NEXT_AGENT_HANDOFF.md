@@ -291,6 +291,29 @@ Rule of thumb:
   - contact email
   - domain/email consistency where possible
 - A subdomain is acceptable for early setup, but if the final `samm` domain is known, buy it early to reduce rework during verification.
+- Product decision locked before any landing-page code work:
+  - keep the current `login.tsx` experience as the auth page
+  - build a separate public marketing/compliance landing page for `getsamm.app`
+  - do not overload the auth screen with Meta-proof/legal/contact content
+- Reason for the split:
+  - the current auth page is strong as a focused sign-in/create-workspace experience
+  - Meta/business-proof content needs public-facing business context, legal links, and contact details that should exist outside the sign-in surface
+- Public landing page minimum additions when that slice starts:
+  - clear `samm` / `getsamm.app` product description
+  - public contact details (`hello@getsamm.app`, Lusaka/Zambia region if desired)
+  - Privacy Policy
+  - Terms of Service
+  - consistent browser tab title and metadata (`samm`, not `TSH Marketing OS`)
+  - clear relationship between brand (`samm`) and website (`getsamm.app`)
+- Current Meta / registration progress:
+  - `getsamm.app` business portfolio created in Meta
+  - `Samm` Facebook Page created under that portfolio
+  - `getsamm.app` domain added
+  - personal verification for Lusa Malingusha completed successfully
+  - PACRA name clearance submitted and pending review (`GETSAMM.APP`, `SAMM TECHNOLOGIES`, `SAMM`)
+- Current external blocker:
+  - organization verification should not be forced until PACRA clearance and formal registration are completed
+  - target document for later Meta organization verification: `Business Registration or License Document` from PACRA
 
 ## Constraints To Preserve
 - Do not do a broad `samm` workspace redesign.
