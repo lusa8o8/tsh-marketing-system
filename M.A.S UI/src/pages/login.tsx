@@ -1,5 +1,5 @@
 import { FormEvent, useState } from "react";
-import { useLocation } from "wouter";
+import { Link, useLocation } from "wouter";
 import {
   AlertCircle,
   ArrowRight,
