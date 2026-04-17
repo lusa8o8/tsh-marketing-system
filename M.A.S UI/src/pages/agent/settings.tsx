@@ -27,6 +27,16 @@ const INTEGRATIONS = [
   { id: "telegram",  name: "Telegram Channel",          Icon: Send,        color: "#26A5E4", live: false },
 ];
 
+const FACEBOOK_APP_ID = import.meta.env.VITE_FACEBOOK_APP_ID ?? "1944340656223346";
+const FACEBOOK_API_VERSION = "v25.0";
+
+type FacebookPageOption = {
+  id: string;
+  name: string;
+  access_token: string;
+  tasks?: string[];
+};
+
 export default function AgentSettings() {
   const { data: config, isLoading } = useGetOrgConfig();
   const updateMutation = useUpdateOrgConfig();
@@ -40,8 +50,12 @@ export default function AgentSettings() {
   const [kpiData, setKpiData] = useState<any>({});
   const [pipelineData, setPipelineData] = useState<any>({});
   const [facebookCredentials, setFacebookCredentials] = useState({ page_id: "", access_token: "" });
+  const [facebookPages, setFacebookPages] = useState<FacebookPageOption[]>([]);
+  const [selectedFacebookPageId, setSelectedFacebookPageId] = useState("");
+  const [isConnectingFacebook, setIsConnectingFacebook] = useState(false);
 
   const initialized = useRef(false);
+  const facebookConnectHandled = useRef(false);
 
   useEffect(() => {
     if (config && !initialized.current) {
@@ -134,39 +148,191 @@ export default function AgentSettings() {
     );
   }
 
-  function handleSaveFacebookCredentials() {
+  async function persistFacebookConnection(nextFacebook: Record<string, any>, successTitle: string, successDescription: string) {
     const existing = (config.platform_connections ?? {}) as Record<string, any>;
     const updated = {
       ...existing,
       facebook: {
         ...(existing.facebook ?? {}),
-        connected: true,
+        connected: nextFacebook.connected ?? true,
         connected_at: existing.facebook?.connected_at ?? new Date().toISOString(),
-        page_id: facebookCredentials.page_id.trim(),
-        access_token: facebookCredentials.access_token.trim(),
+        ...nextFacebook,
       },
     };
 
-    updateMutation.mutate(
-      { data: { platform_connections: updated } },
-      {
-        onSuccess: () => {
-          queryClient.invalidateQueries({ queryKey: getGetOrgConfigQueryKey() });
-          toast({
-            title: "Facebook credentials saved",
-            description: "Page publishing credentials updated.",
-          });
-        },
-        onError: (err) => {
-          toast({
-            title: "Save failed",
-            description: (err as Error).message ?? "Could not save Facebook credentials.",
-            variant: "destructive",
-          });
-        },
-      }
-    );
+    await updateMutation.mutateAsync({ data: { platform_connections: updated } });
+    queryClient.invalidateQueries({ queryKey: getGetOrgConfigQueryKey() });
+    toast({ title: successTitle, description: successDescription });
   }
+
+  async function handleSaveFacebookCredentials() {
+    try {
+      await persistFacebookConnection(
+        {
+          connected: true,
+          page_id: facebookCredentials.page_id.trim(),
+          access_token: facebookCredentials.access_token.trim(),
+        },
+        "Facebook credentials saved",
+        "Page publishing credentials updated."
+      );
+    } catch (err) {
+      toast({
+        title: "Save failed",
+        description: (err as Error).message ?? "Could not save Facebook credentials.",
+        variant: "destructive",
+      });
+    }
+  }
+
+  function getFacebookRedirectUri() {
+    return `${window.location.origin}/operations/settings?facebook_connect=1`;
+  }
+
+  function clearFacebookConnectUrl() {
+    const url = new URL(window.location.href);
+    url.searchParams.delete("facebook_connect");
+    url.hash = "";
+    window.history.replaceState({}, document.title, `${url.pathname}${url.search}${url.hash}`);
+  }
+
+  function handleStartFacebookConnect() {
+    if (!FACEBOOK_APP_ID) {
+      toast({
+        title: "Facebook app missing",
+        description: "Set VITE_FACEBOOK_APP_ID before using the official Facebook connect flow.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const params = new URLSearchParams({
+      client_id: FACEBOOK_APP_ID,
+      redirect_uri: getFacebookRedirectUri(),
+      scope: "pages_show_list,pages_read_engagement,pages_manage_posts",
+      response_type: "token",
+      auth_type: "rerequest",
+    });
+
+    window.location.assign(`https://www.facebook.com/${FACEBOOK_API_VERSION}/dialog/oauth?${params.toString()}`);
+  }
+
+  async function handleUseSelectedFacebookPage() {
+    const page = facebookPages.find((entry) => entry.id === selectedFacebookPageId);
+    if (!page) return;
+
+    try {
+      setFacebookCredentials({ page_id: page.id, access_token: page.access_token });
+      await persistFacebookConnection(
+        {
+          connected: true,
+          page_id: page.id,
+          page_name: page.name,
+          access_token: page.access_token,
+          tasks: page.tasks ?? [],
+          connected_via: "meta_app",
+        },
+        "Facebook page connected",
+        `${page.name} is now connected through the official samm app.`
+      );
+      setFacebookPages([]);
+      setSelectedFacebookPageId("");
+    } catch (err) {
+      toast({
+        title: "Facebook connect failed",
+        description: (err as Error).message ?? "Could not save the selected Facebook page.",
+        variant: "destructive",
+      });
+    }
+  }
+
+  useEffect(() => {
+    if (facebookConnectHandled.current) return;
+
+    const url = new URL(window.location.href);
+    if (url.searchParams.get("facebook_connect") !== "1") return;
+
+    const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+    const accessToken = hashParams.get("access_token");
+    const errorDescription =
+      hashParams.get("error_description") ??
+      url.searchParams.get("error_description") ??
+      hashParams.get("error_reason");
+
+    facebookConnectHandled.current = true;
+
+    if (!accessToken) {
+      clearFacebookConnectUrl();
+      if (errorDescription) {
+        toast({
+          title: "Facebook connect cancelled",
+          description: decodeURIComponent(errorDescription),
+          variant: "destructive",
+        });
+      }
+      return;
+    }
+
+    const controller = new AbortController();
+
+    (async () => {
+      setIsConnectingFacebook(true);
+      try {
+        const params = new URLSearchParams({
+          fields: "id,name,access_token,tasks",
+          access_token: accessToken,
+        });
+        const response = await fetch(`https://graph.facebook.com/${FACEBOOK_API_VERSION}/me/accounts?${params.toString()}`, {
+          signal: controller.signal,
+        });
+        const payload = await response.json();
+
+        if (!response.ok || payload.error) {
+          throw new Error(payload.error?.message ?? "Could not fetch Facebook Pages.");
+        }
+
+        const pages = (payload.data ?? []) as FacebookPageOption[];
+        if (!pages.length) {
+          throw new Error("No manageable Facebook Pages were returned for this account.");
+        }
+
+        if (pages.length === 1) {
+          const [page] = pages;
+          setFacebookCredentials({ page_id: page.id, access_token: page.access_token });
+          await persistFacebookConnection(
+            {
+              connected: true,
+              page_id: page.id,
+              page_name: page.name,
+              access_token: page.access_token,
+              tasks: page.tasks ?? [],
+              connected_via: "meta_app",
+            },
+            "Facebook page connected",
+            `${page.name} is now connected through the official samm app.`
+          );
+        } else {
+          setFacebookPages(pages);
+          setSelectedFacebookPageId(pages[0]?.id ?? "");
+          toast({
+            title: "Choose a Facebook page",
+            description: "Select which connected Page samm should use for publishing.",
+          });
+        }
+      } catch (err) {
+        toast({
+          title: "Facebook connect failed",
+          description: (err as Error).message ?? "Could not complete Facebook connection.",
+          variant: "destructive",
+        });
+      } finally {
+        setIsConnectingFacebook(false);
+        clearFacebookConnectUrl();
+      }
+    })();
+
+    return () => controller.abort();
+  }, [queryClient, toast, updateMutation]);
 
 
   const handleSave = (sectionKey: string, data: any) => {
@@ -557,6 +723,7 @@ export default function AgentSettings() {
                     const isConnected = !!config.platform_connections[id];
                     const isFacebook = id === "facebook";
                     const hasFacebookCredentials = !!facebookCredentials.page_id && !!facebookCredentials.access_token;
+                    const connectedFacebookPageName = String((platformConnections.facebook?.page_name ?? "") || "");
                     return (
                       <div key={id} className="rounded-lg border bg-background">
                         <div className="flex items-center justify-between p-3">
@@ -581,7 +748,54 @@ export default function AgentSettings() {
 
                         {isFacebook && isConnected ? (
                           <div className="border-t bg-muted/20 px-3 pb-3 pt-3">
-                            <p className="mb-3 text-[11px] text-muted-foreground">Enter the Facebook Page ID and Page Access Token used for live publishing.</p>
+                            <div className="mb-3 rounded-md border bg-background p-3 text-[11px] text-muted-foreground">
+                              <p className="font-medium text-foreground">Official Facebook connection</p>
+                              <p className="mt-1">Connect through the official `samm` Meta app to pull the Page ID and Page Access Token automatically.</p>
+                              {connectedFacebookPageName ? (
+                                <p className="mt-2 text-foreground/80">Currently linked page: <span className="font-medium">{connectedFacebookPageName}</span></p>
+                              ) : null}
+                              <div className="mt-3 flex flex-wrap gap-2">
+                                <Button
+                                  size="sm"
+                                  variant="default"
+                                  className="h-8 text-xs"
+                                  onClick={handleStartFacebookConnect}
+                                  disabled={updateMutation.isPending || isConnectingFacebook}
+                                >
+                                  {isConnectingFacebook ? "Connecting..." : "Connect with samm app"}
+                                </Button>
+                              </div>
+                            </div>
+
+                            {facebookPages.length > 1 ? (
+                              <div className="mb-3 rounded-md border bg-background p-3">
+                                <Label className="text-[11px]">Choose connected Facebook Page</Label>
+                                <select
+                                  value={selectedFacebookPageId}
+                                  onChange={(e) => setSelectedFacebookPageId(e.target.value)}
+                                  className="mt-2 h-8 w-full rounded-md border border-input bg-background px-2 text-xs"
+                                >
+                                  {facebookPages.map((page) => (
+                                    <option key={page.id} value={page.id}>
+                                      {page.name}
+                                    </option>
+                                  ))}
+                                </select>
+                                <div className="mt-3 flex justify-end">
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-8 text-xs"
+                                    onClick={handleUseSelectedFacebookPage}
+                                    disabled={updateMutation.isPending || !selectedFacebookPageId}
+                                  >
+                                    <Check className="mr-1.5 h-3.5 w-3.5" /> Use selected page
+                                  </Button>
+                                </div>
+                              </div>
+                            ) : null}
+
+                            <p className="mb-3 text-[11px] text-muted-foreground">Manual fallback: enter the Facebook Page ID and Page Access Token used for live publishing.</p>
                             <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                               <div className="space-y-1.5">
                                 <Label className="text-[11px]">Page ID</Label>
