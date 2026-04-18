@@ -8,7 +8,7 @@ import {
   Users,
   CalendarDays,
   Bot,
-  Settings,
+  LogOut,
   Menu,
   X,
 } from "lucide-react";
@@ -132,7 +132,7 @@ function SidebarContent({ onNavigate }: SidebarContentProps) {
               void handleSignOut();
             }}
           >
-            <Settings className="h-4 w-4" />
+            <LogOut className="h-4 w-4" />
           </button>
         </div>
       </div>

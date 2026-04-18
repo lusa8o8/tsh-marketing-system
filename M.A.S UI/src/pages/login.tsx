@@ -106,7 +106,7 @@ export default function Login() {
       // Refresh session so the JWT contains the new org_id from app_metadata
       await supabase.auth.refreshSession();
 
-      setLocation("/inbox");
+      setLocation("/samm");
       setIsSubmitting(false);
       return;
     }
@@ -119,7 +119,7 @@ export default function Login() {
       return;
     }
 
-    setLocation("/inbox");
+    setLocation("/samm");
     setIsSubmitting(false);
   };
 
