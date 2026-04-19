@@ -351,6 +351,11 @@ Rule of thumb:
   - fresh same-day activity is highlighted with lightweight badges
 - Verification:
   - `npm run build` passed in `M.A.S UI`
+- Current public-site polish follow-up:
+  - keep the landing page viewport zoom restriction as-is by product choice
+  - add a real public `robots.txt`
+  - add a real public `sitemap.xml`
+  - raise landing-page label contrast where Lighthouse flags low-contrast eyebrow text
 
 ## Constraints To Preserve
 - Do not do a broad `samm` workspace redesign.

@@ -76,8 +76,8 @@ function ProductWindow({
   return (
     <div className="rounded-[1.6rem] border border-black/8 bg-white p-5 shadow-[0_20px_55px_rgba(15,23,42,0.07)]">
       <div className="flex items-center justify-between">
-        <span className="text-[11px] font-semibold uppercase tracking-[0.2em] text-foreground/45">{eyebrow}</span>
-        <Icon className="h-4 w-4 text-foreground/45" />
+        <span className="text-[11px] font-semibold uppercase tracking-[0.2em] text-foreground/65">{eyebrow}</span>
+        <Icon className="h-4 w-4 text-foreground/65" />
       </div>
 
       <div className="mt-5 rounded-[1.2rem] border border-black/8 bg-[#fcfbf8] p-4">
@@ -104,11 +104,11 @@ function ProductWindow({
 
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="rounded-xl border border-black/8 bg-white p-3">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-foreground/45">Approvals</p>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-foreground/65">Approvals</p>
               <p className="mt-2 text-sm font-medium text-[#0b0b0c]">Review copy before it goes live</p>
             </div>
             <div className="rounded-xl border border-black/8 bg-white p-3">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-foreground/45">Status</p>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-foreground/65">Status</p>
               <p className="mt-2 text-sm font-medium text-[#0b0b0c]">Track runs, failures, and next steps</p>
             </div>
           </div>
@@ -145,7 +145,7 @@ export default function Landing() {
         <section className="mx-auto max-w-7xl px-4 pb-16 pt-14 sm:px-6 lg:px-8 lg:pb-24 lg:pt-20">
           <div className="grid gap-10 lg:grid-cols-[0.92fr_1.08fr] lg:items-center">
             <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-foreground/45">Less marketing chaos</p>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-foreground/65">Less marketing chaos</p>
               <h1 className="mt-4 max-w-xl text-[3rem] font-semibold tracking-tight text-[#0b0b0c] sm:text-[3.65rem]">
                 Plan campaigns, approve content, and keep execution moving.
               </h1>
@@ -189,7 +189,7 @@ export default function Landing() {
         <section id="workflow" className="border-y border-black/6 bg-[rgba(255,255,255,0.6)]">
           <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8 lg:py-20">
             <div className="max-w-3xl">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-foreground/45">Product proof</p>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-foreground/65">Product proof</p>
               <h2 className="mt-3 text-[2.3rem] font-semibold tracking-tight text-[#0b0b0c]">
                 See what is moving, what is blocked, and what needs your approval.
               </h2>
@@ -203,7 +203,7 @@ export default function Landing() {
               <div className="rounded-[1.8rem] border border-black/8 bg-[#0b0b0c] p-6 text-white shadow-[0_24px_70px_rgba(15,23,42,0.14)]">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">Meet samm</p>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/70">Meet samm</p>
                     <h3 className="mt-2 text-2xl font-semibold text-[#f5f3ef]">A coordinating layer, not just another scheduler.</h3>
                   </div>
                   <Sparkles className="h-5 w-5 text-white/68" />
@@ -218,13 +218,13 @@ export default function Landing() {
 
                 <div className="mt-6 grid gap-4 sm:grid-cols-2">
                   <div className="rounded-[1.2rem] border border-white/10 bg-white/[0.04] p-4">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">Ask samm</p>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/70">Ask samm</p>
                     <p className="mt-2 text-sm leading-6 text-white/72">
                       Start a campaign, prepare a pipeline, or draft a one-off post without losing the surrounding context.
                     </p>
                   </div>
                   <div className="rounded-[1.2rem] border border-white/10 bg-white/[0.04] p-4">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">Keep control</p>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/70">Keep control</p>
                     <p className="mt-2 text-sm leading-6 text-white/72">
                       Human approvals stay in the loop while the system keeps the workflow moving behind the scenes.
                     </p>
@@ -269,7 +269,7 @@ export default function Landing() {
 
         <section className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8 lg:py-20">
           <div className="max-w-3xl">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-foreground/45">Who it is for</p>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-foreground/65">Who it is for</p>
             <h2 className="mt-3 text-[2.3rem] font-semibold tracking-tight text-[#0b0b0c]">
               Built for founders, operators, and lean teams that need the work to keep moving.
             </h2>
@@ -296,7 +296,7 @@ export default function Landing() {
       <footer className="border-t border-black/6 bg-[#0b0b0c] text-white">
         <div className="mx-auto grid max-w-7xl gap-8 px-4 py-12 sm:px-6 lg:grid-cols-[1.12fr_0.88fr] lg:px-8">
           <div>
-            <p className="text-[11px] font-semibold lowercase tracking-[0.24em] text-white/45">samm</p>
+            <p className="text-[11px] font-semibold lowercase tracking-[0.24em] text-white/70">samm</p>
             <h2 className="mt-4 text-3xl font-semibold tracking-tight text-[#f5f3ef]">A marketing workspace built to buy back time.</h2>
             <p className="mt-4 max-w-2xl text-sm leading-7 text-white/72">
               samm helps teams plan campaigns, approve content, and keep execution moving from one place. Built for small
@@ -321,7 +321,7 @@ export default function Landing() {
 
           <div className="grid gap-6 sm:grid-cols-2">
             <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-white/45">Explore</p>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-white/70">Explore</p>
               <div className="mt-4 flex flex-col gap-3 text-sm text-white/72">
                 <Link href="/login" className="transition-opacity hover:opacity-70">
                   Sign in
@@ -333,7 +333,7 @@ export default function Landing() {
             </div>
 
             <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-white/45">Legal</p>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-white/70">Legal</p>
               <div className="mt-4 flex flex-col gap-3 text-sm text-white/72">
                 <Link href="/privacy" className="transition-opacity hover:opacity-70">
                   Privacy Policy

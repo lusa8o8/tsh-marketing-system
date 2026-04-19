@@ -1506,6 +1506,11 @@ Current conclusion:
   - auth leak cleanup completed (`ops@tsh.com` default removed, browser title corrected)
   - public page includes product positioning, workflow proof, a dedicated `Meet samm` section, and public contact/legal trust elements
   - `npm run build` passed after the split
+ - crawler/accessibility follow-up slice:
+   - keep the current viewport zoom restriction by explicit product choice
+   - add a real `robots.txt`
+   - add a real `sitemap.xml`
+   - raise low-contrast landing-page eyebrow text flagged by Lighthouse
 
 ---
 ## Milestone 14: Multi-Channel Samm Access
