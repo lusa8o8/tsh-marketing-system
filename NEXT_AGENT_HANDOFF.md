@@ -29,7 +29,7 @@ Before touching code, reread:
 - `SAMM_CODEBASE_MAPPING.md`
 
 ## Current Build Status
-Stable through `M11A-M12A` on `main`.
+Stable through `M13H` public/productization checkpoints on `main`.
 
 Do not trust the old handoff text that said the repo was only stable through `M10 + 8C`.
 Current source of truth is:
@@ -38,18 +38,18 @@ Current source of truth is:
 - this file for institutional memory and next-slice guidance
 
 ### Latest commits
-- `e657361` - docs(manual): replace all technical copy with plain language
-- `d93cdb1` - feat(M12A): add Operations Manual page
-- `6fd4e80` - M12: Pipeline D one-off post + docs - duplicate milestones fixed, tests tracked
-- `afc5e3c` - M11F: Platform cadence policy - deterministic post scheduling
-- `d50e937` - docs: add Test Status tracker - verified vs pending across M10-M11F
-- `0e33bd2` - M11E+: social handles, CTA URL, logo note - close Canva AI brief gaps
-- `32b4ef3` - docs: mark M11E complete in roadmap
-- `319e90b` - M11E: brand visual kit - design brief injection, Settings UI, creative override
-- `13bdf01` - M11C + M11D: Pipeline C accuracy, registry polish, event_end_date
-- `c89cee8` - fix: campaign duration units + inbox brief card rendering
-- `97daa37` - feat(M11B): campaign duration constraint + post scheduling spread
-- `4d6a655` - docs: M11A verified complete + confirmation card pattern institutional memory
+- `e8914a3` - fix: add public crawl files and improve landing contrast
+- `e226b37` - fix: polish auth redirect and sign-out control
+- `95804f1` - feat: add official facebook connect flow in settings
+- `99e151c` - docs: lock meta app publishing proof and next slice
+- `dce0b44` - fix: restore login route links
+- `4f3a247` - feat: improve content registry freshness visibility
+- `6905fc2` - copy: refine landing and legal page wording
+- `e4108ba` - feat: add public landing page and auth split
+- `6cd691f` - refactor(M13G): finish shared llm migration and generic calendar types
+- `6a4bd14` - refactor(M13G): migrate pipeline c and stabilize adapter flows
+- `6942852` - refactor(M13G): migrate pipeline b to shared llm client
+- `ee99ffc` - refactor(M13G): migrate pipeline a to shared llm client
 
 All pushed to `main`.
 
@@ -344,6 +344,10 @@ Rule of thumb:
   - organization verification should not be forced until PACRA registration certificate is issued
   - target document for later Meta organization verification: `Business Registration or License Document` from PACRA
   - next implementation slice should productize Facebook connection inside `samm` instead of relying on manual token entry / Explorer-only testing
+- Official Facebook connect flow is now productized in `samm`:
+  - `Operations -> Settings` now exposes `Connect with samm app`
+  - the app returns to `samm`, fetches manageable Pages, and stores the selected Page connection into org config
+  - manual Page ID / token entry remains as a fallback only
 - Content Registry freshness polish is now implemented locally:
   - draft cards show drafted-at timestamps instead of only `Awaiting approval`
   - draft tab adds day grouping (`Today`, `Yesterday`, date) while preserving campaign grouping within each day
@@ -356,6 +360,30 @@ Rule of thumb:
   - add a real public `robots.txt`
   - add a real public `sitemap.xml`
   - raise landing-page label contrast where Lighthouse flags low-contrast eyebrow text
+  - all three are now landed and pushed
+
+## Current M13I Diagnosis
+- `M13I` is the active internal honesty + isolation hardening slice.
+- Goal:
+  - remove Pipeline A mock metrics writes
+  - harden backend org resolution so missing org context fails clearly instead of silently collapsing onto the dev org
+  - leave Metrics UI in an honest empty state until real ingestion lands
+- Diagnosis locked before code:
+  - Metrics UI is org-scoped in the frontend query layer and is not directly hardcoded
+  - identical values across separate workspaces are caused by Pipeline A seeding the same placeholder `platform_metrics` snapshot into each org
+  - several active edge functions still contain silent default-org fallbacks; these are not the reason for the identical metrics, but they are a real isolation-risk pattern
+- Scope to keep narrow:
+  - active-path hardening only:
+    - `pipeline-a-engagement`
+    - `pipeline-b-weekly`
+    - `pipeline-c-campaign`
+    - `pipeline-d-post`
+    - `coordinator-chat`
+  - do not broaden this slice into live metrics ingestion, analytics connectors, or a general frontend auth refactor
+- Verification target:
+  - no new mock metric snapshots are written
+  - missing org context fails loudly on the active edge-function path
+  - Metrics page no longer presents seeded placeholder numbers as if they were live analytics
 
 ## Constraints To Preserve
 - Do not do a broad `samm` workspace redesign.

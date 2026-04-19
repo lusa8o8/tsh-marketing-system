@@ -1512,6 +1512,54 @@ Current conclusion:
    - add a real `sitemap.xml`
    - raise low-contrast landing-page eyebrow text flagged by Lighthouse
 
+### M13H: Meta Production Identity + Live Publishing Productization
+Status:
+- active external/compliance + productization slice
+
+Current verified state:
+- `getsamm.app` Meta business portfolio exists
+- `Samm` Facebook Page exists
+- personal verification completed
+- official `samm` Meta app exists and is minimally configured
+- the app can:
+  - retrieve the Honey Shop page and Page token
+  - read Page metadata
+  - publish a real post to `Honey Shop ZM`
+- official in-product Facebook connect flow is now implemented in `Operations -> Settings`
+
+Current external blocker:
+- PACRA registration certificate is still pending
+- clean Meta organization verification should wait for the PACRA certificate / business registration document
+
+### M13I: Metrics Honesty + Org Isolation Hardening
+Status:
+- active next internal slice
+
+Goal:
+- remove Pipeline A mock metric writes
+- harden backend org resolution on the active path so missing org context fails clearly
+- leave Metrics UI in an honest empty state until real ingestion lands
+
+Diagnosis:
+- Metrics queries are already org-scoped in the frontend
+- identical values across separate workspaces are caused by Pipeline A writing the same placeholder `platform_metrics` rows into each org
+- active edge functions still contain silent default-org fallbacks that can mask missing org context
+
+Scope:
+- remove the mock `platform_metrics` snapshot write from `pipeline-a-engagement`
+- harden org resolution in:
+  - `pipeline-a-engagement`
+  - `pipeline-b-weekly`
+  - `pipeline-c-campaign`
+  - `pipeline-d-post`
+  - `coordinator-chat`
+- switch the Metrics page to an honest empty-state until live ingestion exists
+
+Non-goals:
+- do not build live metrics ingestion in this slice
+- do not broaden into full frontend auth/org bootstrap cleanup
+- do not refactor legacy non-active paths unless they block the active slice
+
 ---
 ## Milestone 14: Multi-Channel Samm Access
 Status:
@@ -1627,14 +1675,13 @@ Reason:
 - new agents and channels must plug into the same architecture, not fork it
 
 ## Recommended Immediate Next Slice
-Milestones M11A through M11F and M12 are complete. All brand, scheduling, and one-off post infrastructure is in place.
+Milestones M11A through M11F, M12, M13E, M13F, and M13G are complete. Public landing/auth split, Content Registry freshness polish, official Facebook app proof, and the in-product Facebook connect flow are already landed.
 
 Next highest-leverage work:
-1. **M13H Meta production identity + compliance** - active external setup slice. Current status: `getsamm.app` Meta business portfolio exists, `Samm` Page exists, personal verification succeeded, PACRA name clearance submitted; blocker is waiting for formal registration documents before organization verification.
-2. **Landing/public-site split** - when code work starts, keep `login.tsx` as the auth page and build a separate public landing page for Meta/business-proof content, legal links, and contact details.
-3. **Content Registry freshness polish** - implemented locally. Drafts now show drafted-at timestamps, and drafts/scheduled/published/failed tabs use day grouping for clearer freshness scanning.
-4. **Canva AI close-the-loop test** - run a campaign with brand_visual + social handles filled in Settings and verify Canva AI completes a design without follow-up questions.
-5. **Adapter maturation** - shared JSON policy, provider routing, observability, and future provider overrides are the remaining LLM follow-on work; no more backend surface migrations are required right now.
+1. **M13I Metrics honesty + org isolation hardening** - active internal slice. Remove Pipeline A mock metric writes, harden active-path org resolution, and leave Metrics UI in an honest empty state until real ingestion lands.
+2. **M13H Meta production identity + compliance** - continue in parallel as the active external setup slice. Current status: official app and in-product connect flow are working; blocker is waiting for the PACRA registration certificate before clean organization verification.
+3. **Canva AI close-the-loop test** - run a campaign with brand_visual + social handles filled in Settings and verify Canva AI completes a design without follow-up questions.
+4. **Adapter maturation** - shared JSON policy, provider routing, observability, and future provider overrides are the remaining LLM follow-on work; no more backend surface migrations are required right now.
 
 ## Commit Strategy
 Recommended commit pattern:
